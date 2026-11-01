@@ -1,0 +1,17 @@
+== M0 recon 2026-11-01T14:32:21Z
+-- toolchain:
+  MISSING: wine
+  MISSING: wine64
+  present: /usr/lib/wine/wine64
+  present: x86_64-w64-mingw32-g++
+  present: Xvfb
+  present: ffmpeg
+  present: convert
+  MISSING: xdotool
+  present: git
+  present: curl
+  present: python3
+-- network probes:
+  github raw windhawk_api.h: 404
+  github api minhook: 200
+  deb.debian.org: 200
