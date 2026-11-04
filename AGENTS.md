@@ -36,6 +36,35 @@ DLLs in `verdict.not_verifiable_here`, and tell the user what to check on real W
 (hook installed? original called? no deadlock on loader lock?). The shim fails those
 calls on purpose and logs `[SHIM] symbol lookup not available in sandbox`.
 
+Then run the symbol matrix — it works without Windows and answers the first question a
+shell mod fails on:
+
+```bash
+python3 -m awt.symbols path/to/mod.wh.cpp                     # table on stdout
+python3 -m awt.symbols path/to/mod.wh.cpp --list              # extraction only, no network
+python3 -m awt.symbols path/to/mod.wh.cpp --json .sandbox/symbol-matrix.json
+python3 -m awt.cli run path/to/mod.wh.cpp --symbols-json .sandbox/symbol-matrix.json
+```
+
+Read the outcomes literally and quote them literally:
+* `found` — that name exists in the public PDB of that exact binary. Say "the symbol
+  exists on build X"; never "the hook works". Confidence tells you how the names were
+  compared (`exact` = byte-identical like the engine does, `structural` = decoded
+  decorated name, `partial` = name only).
+* `missing` — the PDB was read and the name is not in it. This is actionable: the mod is
+  inert on that build; check whether it marks the symbol `optional`.
+* `ambiguous` — several candidates, or a case-only difference (Windhawk would not match).
+* `unknown` — the check did not happen (no network, no signature, module absent from that
+  build, unreadable PDB, module not resolvable from the source). Report it as unknown.
+Exit codes: 0 at least one cell resolved, 3 nothing could be checked, 2 usage error.
+Full documentation, evidence and limits: `docs/symbol-matrix.md`.
+
+## 4b. Never commit downloaded binaries or generated caches
+PEs, PDBs, winbindex payloads and parsed symbol indexes live in `.cache/` (git-ignored).
+Reference clones and the venv live in `.sandbox/` (git-ignored). Machine-specific matrix
+overrides go in `configs/symbol-matrix.local.yaml`. Only `configs/symbol-matrix.yaml`,
+which holds public metadata (version strings, PE timestamps and sizes), is committed.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.

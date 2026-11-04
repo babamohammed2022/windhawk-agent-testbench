@@ -1,0 +1,110 @@
+# Build matrix for `python3 -m awt.symbols`.
+#
+# What this file configures: which Windows builds a mod's internal symbols are
+# checked against, where the binaries/PDBs come from, and where they are cached.
+#
+# Nothing here is downloaded at commit time and no Microsoft binary is stored in
+# the repository: PEs and PDBs land in .cache/symbols/ (git-ignored) only when a
+# run can actually reach the symbol server. If it cannot, every affected cell is
+# reported as "unknown" - never as "missing" and never as "found".
+#
+# A machine-specific override can be kept out of git as configs/symbol-matrix.local.yaml
+# or pointed at with --matrix / AWT_SYMBOL_MATRIX.
+
+schema: 1
+
+symbol_server:
+  # Microsoft's public symbol server. Any symsrv-compatible URL works
+  # (the unit tests point this at a local http://127.0.0.1 server).
+  base_url: "https://msdl.microsoft.com/download/symbols"
+  timeout_seconds: 20
+  attempts: 2
+  cache_dir: ".cache/symbols"
+
+winbindex:
+  # Public index used to turn "module + build" into the PE signature the symbol
+  # server needs. Only metadata (version, timestamp, size) is read from it.
+  enabled: true
+  repo: "m417z/winbindex"
+  ref: "gh-pages"
+  cache_dir: ".cache/winbindex"
+  timeout_seconds: 25
+
+arch: "x86-64"          # Windhawk mods for the 64-bit shell; "x86" selects 32-bit
+
+# The builds a shell mod has to survive. `channel` is the winbindex key.
+# `required: true` builds are the minimum the tool reports on; add or disable
+# entries freely - a disabled or unresolvable build yields "unknown".
+builds:
+  - id: "win10-1507"
+    label: "Windows 10 1507 (RTM)"
+    channel: "1507"
+    required: true
+    note: "oldest supported Windows 10 shell; twinui.pcshell.dll does not exist yet"
+  - id: "win10-22h2"
+    label: "Windows 10 22H2"
+    channel: "22H2"
+    required: true
+  - id: "win11-21h2"
+    label: "Windows 11 21H2 (original release)"
+    channel: "11-21H2"
+    required: true
+    note: "first build with taskbar.dll"
+  - id: "win11-23h2"
+    label: "Windows 11 23H2"
+    channel: "11-23H2"
+    required: true
+  - id: "win11-24h2"
+    label: "Windows 11 24H2"
+    channel: "11-24H2"
+    required: true
+  - id: "win11-25h2"
+    label: "Windows 11 25H2"
+    channel: "11-25H2"
+    required: true
+  - id: "win10-1909"
+    label: "Windows 10 1909"
+    channel: "1909"
+    required: false
+    enabled: false
+    note: "kept as an example of an optional build; enable to include it"
+
+# PE signatures pinned from winbindex on 2026-11-04 (amd64). They make a run
+# reproducible and let the tool work when api.github.com is unreachable. Values
+# here override the built-in table in awt/symbols/winbindex.py; a unit test
+# checks the two stay in sync. Refresh with:
+#   python3 -m awt.symbols <mod> --refresh-pinned twinui.pcshell.dll explorer.exe
+pinned_signatures:
+  twinui.pcshell.dll:
+    22H2:    {timestamp: 0x36CDA8CA, virtual_size: 0x6B4000, version: "10.0.19041.6328"}
+    11-21H2: {timestamp: 0x4E107849, virtual_size: 0x830000, version: "10.0.22000.3079"}
+    11-23H2: {timestamp: 0x018CB3CD, virtual_size: 0xA26000, version: "10.0.22621.6345"}
+    11-24H2: {timestamp: 0xBC86BB4D, virtual_size: 0x9A5000, version: "10.0.26100.9549"}
+    11-25H2: {timestamp: 0x8E751D2B, virtual_size: 0x9D2000, version: "10.0.26100.9818"}
+  explorer.exe:
+    1507:    {timestamp: 0x686382E5, virtual_size: 0x44E000, version: "10.0.10240.21072"}
+    22H2:    {timestamp: 0x5506678D, virtual_size: 0x5C9000, version: "10.0.19041.6392"}
+    11-21H2: {timestamp: 0xF17E3E0F, virtual_size: 0x4D3000, version: "10.0.22000.3079"}
+    11-23H2: {timestamp: 0x754F843A, virtual_size: 0x554000, version: "10.0.22621.7517"}
+    11-24H2: {timestamp: 0xBEE7E13F, virtual_size: 0x344000, version: "10.0.26100.9711"}
+    11-25H2: {timestamp: 0xF9A8CE40, virtual_size: 0x327000, version: "10.0.26100.9818"}
+  taskbar.dll:
+    11-21H2: {timestamp: 0x9523184F, virtual_size: 0x33F000, version: "10.0.22000.3260"}
+    11-23H2: {timestamp: 0x64EBA2DD, virtual_size: 0x3B5000, version: "10.0.22621.6274"}
+    11-24H2: {timestamp: 0x769B877B, virtual_size: 0x308000, version: "10.0.26100.9711"}
+    11-25H2: {timestamp: 0x617E422B, virtual_size: 0x31A000, version: "10.0.26100.9818"}
+  twinui.dll:
+    1507:    {timestamp: 0x68E678A0, virtual_size: 0xAD9000, version: "10.0.10240.21161"}
+    22H2:    {timestamp: 0xC534F761, virtual_size: 0x618000, version: "10.0.19041.5915"}
+    11-21H2: {timestamp: 0x3D4F3484, virtual_size: 0x5AA000, version: "10.0.22000.3147"}
+
+# Local copies of a module, used instead of downloading (handy offline and for
+# the tests: point at any PE whose debug directory names a PDB you also have).
+#   local_modules:
+#     twinui.pcshell.dll: {pe: "/path/to/twinui.pcshell.dll"}
+local_modules: {}
+
+limits:
+  max_symbols_per_module: 400000
+  max_requests: 0                 # 0 = no cap
+  sleep_between_downloads: 0.2    # be polite to the public server
