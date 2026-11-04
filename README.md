@@ -77,14 +77,44 @@ matrix above. Details: [`docs/backends.md`](docs/backends.md),
 [`docs/vm-protocol.md`](docs/vm-protocol.md),
 [`docs/reference-vms.md`](docs/reference-vms.md).
 
+## Visual comparison (Feature 3)
+"Does the screen look right?" as numbers, coordinates and a picture of *where* the
+difference is — with an explicit statement of what those numbers cannot prove.
+Descriptive, never a verdict: the section is added next to `verdict.level` and never
+changes it.
+
+```bash
+python3 -m awt.visualdiff shot.png reference.png
+python3 -m awt.visualdiff shot.png win11.png win7.png --diffmap diff.png --json out.json
+python3 -m awt.visualdiff shot.png --mod examples/taskbar-clock.wh.cpp --roi 0,980,1920,120
+python3 -m awt.visualdiff shot.png reference.png --report .sandbox/report.json
+```
+
+Per-pixel statistics (identical / within-tolerance / differing, mean, max, RMSE,
+histogram), SSIM, and divergent **regions** with box, area, worst delta and centroid.
+Similarity floors alone hide small sharp changes — a window moved by two pixels keeps
+98.7 % of the image similar — so two ceilings (`max_differing_ratio`,
+`max_region_area`) run in the other direction and the report shows which rule decided.
+Statuses are `match` / `mismatch` / `incomparable` / `unavailable` (exit 0/1/3/3):
+different resolutions are *incomparable* rather than silently rescaled, and an
+unreadable image is never presented as a difference of zero. No Pillow, no numpy —
+`awt/png.py` reads and writes PNG itself, and with numpy installed the SSIM uses the
+standard 11×11 Gaussian window instead of the documented 8×8 block fallback.
+Reference screenshots are images of Microsoft interfaces and are never committed.
+Details: [`docs/visual-diff.md`](docs/visual-diff.md).
+
 ## Layout
 - `awt/` — Python tool: metadata parser, dependency analyzer, builder, runner, report,
   conformance checker (`python3 -m awt.conformance`), environment probe (`awt/env.py`),
   dependency-free YAML subset (`awt/yamlmini.py`), PE reader (`awt/pe.py`), PDB reader
   (`awt/pdb/`), the symbol matrix (`awt/symbols/`, `python3 -m awt.symbols`), the shared
-  marker/verdict logic (`awt/verdict.py`) and the execution backends (`awt/backends/`,
-  `python3 -m awt.backends`).
+  marker/verdict logic (`awt/verdict.py`), the execution backends (`awt/backends/`,
+  `python3 -m awt.backends`), the dependency-free PNG reader/writer (`awt/png.py`) and
+  the visual comparison (`awt/visualdiff/`, `python3 -m awt.visualdiff`).
 - `configs/symbol-matrix.yaml` — the Windows builds Feature 1 checks against.
+- `configs/visual.example.yaml` — template for visual thresholds and reference sets
+  (copy to the git-ignored `configs/visual.local.yaml`, or put `<mod>.visual.yaml`
+  next to the mod).
 - `configs/vm.example.yaml` — template for the self-hosted VM backend (copy to the
   git-ignored `configs/vm.local.yaml`).
 - `vm/agent/awt_agent.ps1` — the in-guest agent: plain PowerShell 5.1, no network, no
@@ -98,11 +128,14 @@ matrix above. Details: [`docs/backends.md`](docs/backends.md),
   `enumwins.exe` (window-class probe).
 - `examples/`, `tests/shim_conformance/` — mods used as acceptance tests.
 - `docs/` — `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
-  `backends.md`, `vm-protocol.md`, `reference-vms.md`, official headers cache.
+  `backends.md`, `vm-protocol.md`, `reference-vms.md`, `visual-diff.md`, official
+  headers cache.
 - `tests/unit/` — Wine-free unit tests (`python3 tests/unit/run_unit.py`), including an
-  end-to-end symbol-matrix run against a local fake symbol server and an end-to-end VM
+  end-to-end symbol-matrix run against a local fake symbol server, an end-to-end VM
   protocol run against a fake hypervisor and fake guest agent
-  (`tests/unit/fixtures/fake_vm.py`).
+  (`tests/unit/fixtures/fake_vm.py`), and visual-comparison tests on generated
+  screenshots (`tests/unit/fixtures/images.py`) including a byte-for-byte PNG
+  cross-check against Pillow when it is installed.
 
 ## How a mod is loaded (Wine backend)
 1. metadata + YAML settings parsed (`awt/metadata.py`);

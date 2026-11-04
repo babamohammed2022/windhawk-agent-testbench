@@ -97,3 +97,36 @@
     than presented as a desktop; a file whose magic bytes do not match its extension is
     reported as unavailable. No screenshot of a Microsoft interface is committed to this
     repository.
+
+## Added by Feature 3 (visual comparison), observed 2026-11-04
+
+21. **Visual similarity is not a verdict, in either direction.** A `match` can be a mod
+    that hooks nothing and leaves the desktop untouched; a `mismatch` can be a working
+    mod that draws the right thing in a different font. The section is added next to
+    `verdict.level` and never changes it, and `verdict.visual_comparison_note` says so in
+    words.
+22. **No reference screenshot has been compared yet.** `awt.refshots` (Feature 4) does
+    not exist, so `.cache/refshots/` is empty and every configured reference in
+    `configs/visual.example.yaml` currently reports `unavailable` with the missing path.
+    The comparison code is exercised end to end on generated images in
+    `tests/unit/fixtures/images.py`, never on a capture of a real Windows desktop.
+23. **The two SSIM implementations are not interchangeable.** With numpy the standard
+    11×11 Gaussian window runs; without it, non-overlapping 8×8 blocks with a uniform
+    window. The same pair scores 0.986 and 0.886 in one of this repository's tests. Every
+    result records its implementation and the pure path carries a note that its number is
+    not comparable with scikit-image, Pillow or a paper; thresholds can be set per
+    implementation (`ssim_min_numpy`, `ssim_min_pure`).
+24. **Normalisation weakens the numbers, and is disclosed rather than avoided.**
+    Resizing to match a resolution is a box average that blurs edges (one test drops
+    SSIM to 0.848 purely from resampling); downscaling to keep the pure-Python path
+    usable makes region coordinates approximate and averages away one-pixel differences.
+    Both appear in `caveats` and in `normalisation.steps`. Colour management is **not**
+    applied: pHYs, gAMA and iCCP are read and reported, and pixels are compared as
+    stored in the file, so a wide-gamut capture and an sRGB reference are compared
+    numerically rather than perceptually. 16-bit images are reduced to their high byte.
+25. **Things this comparison cannot see.** No OCR, so a wrong glyph at the right size can
+    pass; no font-rendering model, so ClearType, hinting and sub-pixel positioning must be
+    absorbed by `tolerance` or excluded by `roi`; no notion of time, so a clock, a
+    blinking caret or an animation makes a correct mod differ; no DPI virtualisation, so a
+    150 %-scaled capture is simply a different image. The PNG reader refuses interlaced
+    images outright (Adam7 is not implemented) instead of guessing.

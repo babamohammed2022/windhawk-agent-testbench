@@ -89,6 +89,38 @@ do not re-run it in a loop hoping for a different answer, and never present a
 credential is committed. Protocol: `docs/vm-protocol.md`; VMs worth building:
 `docs/reference-vms.md`.
 
+## 4d. Reading a visual comparison (and not over-claiming from it)
+```bash
+python3 -m awt.visualdiff shot.png reference.png                  # 0 match, 1 mismatch, 3 incomparable/unavailable
+python3 -m awt.visualdiff shot.png --mod mod.wh.cpp --diffmap diff.png --json out.json
+python3 -m awt.visualdiff shot.png reference.png --report .sandbox/report.json   # additive attach
+python3 -m awt.visualdiff --show-config --mod-id taskbar-clock    # which thresholds will be applied
+```
+The section is **descriptive, not a verdict**. It is added next to `verdict.level`
+(`visual_comparison`, plus `verdict.visual_comparison_note`) and never changes it, so a
+matching picture does not upgrade `loads_no_crash` and a mismatch does not downgrade a
+verified hook.
+* Read `checks`, not just `status`: every rule is reported with its value, threshold,
+  `direction` (`at_least` floor / `at_most` ceiling) and whether it passed, so you can see
+  *which* rule decided. Similarity floors hide small sharp changes — a window shifted by
+  two pixels keeps 98.7 % of the image similar — which is what `max_differing_ratio` and
+  `max_region_area` are for.
+* Act on `regions`: box, area, worst delta, centroid, and `coordinate_precision` (exact,
+  or approximate after downscaling). Coordinates are relative to the ROI when one was
+  used.
+* `incomparable` means the two images cannot be compared as they are (say, different
+  resolutions). Fix the capture or pass `--resize` / `--roi`; the resize is then recorded
+  as an approximation. `unavailable` means a file could not be read — never present that
+  as a zero difference.
+* Record which implementation ran: `ssim-gaussian-11x11-numpy` and `ssim-block-8x8-pure`
+  are both valid structural similarities and their numbers are **not** interchangeable.
+  Configure `ssim_min_numpy` / `ssim_min_pure` separately if you use both.
+* Thresholds resolve built-in defaults ← file `defaults:` ← mod ← reference
+  (`<mod>.visual.yaml`, `configs/visual.local.yaml`, or `--config`). Reference screenshots
+  are images of Microsoft interfaces: they live in the git-ignored `.cache/refshots/` and
+  are **never committed**. A configured reference that does not exist yet reports
+  `unavailable`. Details: `docs/visual-diff.md`.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.
