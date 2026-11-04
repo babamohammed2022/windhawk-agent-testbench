@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 
-from . import metadata
+from . import env, metadata
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CC = "x86_64-w64-mingw32-g++"
@@ -30,6 +30,22 @@ ERR_RE = re.compile(r"^(?P<file>[^:\s][^:]*):(?P<line>\d+):(?P<col>\d+):\s+(?P<k
 
 def _run(cmd, cwd=None):
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
+def missing_toolchain() -> list:
+    """Cross-compilation tools that are not installed (empty when ready).
+
+    Checked, never assumed: without them no build is possible and the report
+    must say `not_executed` instead of pretending the mod is broken.
+    """
+    missing = []
+    for label, names in (("MinGW C++ compiler", [CC, "x86_64-w64-mingw32-clang++"]),
+                         ("MinGW C compiler", [CC_C]),
+                         ("MinGW nm", [NM]),
+                         ("MinGW c++filt", [FILT])):
+        if not env.which(names):
+            missing.append(label)
+    return missing
 
 
 def _parse_diagnostics(text):
@@ -68,7 +84,17 @@ def build(mod_path, sandbox=None):
 
     result = {"ok": False, "errors": [], "warnings": [], "dll": None,
               "mod_id": mod_id, "meta": meta, "settings": settings,
-              "build_dir": bdir}
+              "build_dir": bdir, "toolchain_missing": []}
+    missing = missing_toolchain()
+    if missing:
+        result["toolchain_missing"] = missing
+        result["errors"].append({
+            "file": mod_path, "line": 0, "col": 0,
+            "message": ("build not attempted: %s not installed in this "
+                        "environment (run ./setup.sh where packages are "
+                        "reachable); nothing was compiled or executed"
+                        % ", ".join(missing))})
+        return result
     settings_path = os.path.join(bdir, "settings.json")
     with open(settings_path, "w", encoding="utf-8") as f:
         f.write(metadata.settings_json(settings))

@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from . import analyzer, builder, report
+from . import env as host_env
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX = os.path.join(REPO, ".sandbox")
@@ -57,7 +58,8 @@ def _execute(cmd, env, run_log, seconds, screenshot=False):
     return proc, timed_out, shot
 
 
-def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False):
+def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
+        symbols=None):
     started = time.time()
     b = builder.build(mod_path)
     source = open(mod_path, encoding="utf-8", errors="replace").read()
@@ -65,6 +67,12 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False):
     meta = b["meta"]
 
     rep = report.new_report(b, ana)
+    rep["environment"] = host_env.probe()
+    if symbols:
+        # Feature 1 result, attached additively: it never changes the verdict
+        # level, because a symbol existing in a PDB is not an execution.
+        report.attach_symbol_matrix(rep, symbols)
+    rep["run"]["backend"] = "wine"
     logs_dir = os.path.join(SANDBOX, "logs")
     os.makedirs(logs_dir, exist_ok=True)
     os.makedirs(os.path.join(SANDBOX, "storage", b["mod_id"]), exist_ok=True)
@@ -72,8 +80,20 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False):
     os.makedirs(hist, exist_ok=True)
 
     if not b["ok"]:
-        rep["verdict"]["level"] = "build_failed"
-        rep["verdict"]["summary"] = "build failed: %d error(s)" % len(b["errors"])
+        missing = b.get("toolchain_missing") or []
+        if missing:
+            # Nothing was compiled and nothing was executed: say exactly that
+            # instead of reporting a build failure that never happened.
+            reason = ("no execution backend available in this environment: %s; "
+                      "the mod was neither compiled nor run" % ", ".join(missing))
+            rep["verdict"]["level"] = "not_executed"
+            rep["verdict"]["not_executed_reason"] = reason
+            rep["run"]["backend"] = "unavailable"
+            rep["run"]["reason"] = reason
+            rep["verdict"]["summary"] = "level=not_executed; %s" % reason
+        else:
+            rep["verdict"]["level"] = "build_failed"
+            rep["verdict"]["summary"] = "build failed: %d error(s)" % len(b["errors"])
         return report.finish(rep, hist)
 
     # ---- include analysis (section 3.3, v1: honest simulation mapping)

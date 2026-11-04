@@ -4,7 +4,7 @@ Conformance of `shim/shim.cpp` against the official headers cached in
 `docs/official/` (windhawk_api.h + windhawk_api_internal.h, Windhawk v1.7.3
 distribution headers; engine-side mods_api.h kept for reference).
 
-Last check: 2026-11-01 15:26 UTC
+Last check: 2026-11-04 13:45 UTC
 
 Signature mismatches: **0 by construction** — the shim is compiled including the
 official `windhawk_api_internal.h`, so a wrong signature cannot build.

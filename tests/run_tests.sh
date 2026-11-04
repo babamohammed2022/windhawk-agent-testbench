@@ -1,8 +1,33 @@
 #!/bin/bash
-# Tests of the tool itself (section 8 acceptance criteria).
+# Acceptance suite of the tool itself (section 8 criteria).
+#
+# Two stages, deliberately separated:
+#   1. unit tests  — pure Python, no Wine, always executed (offline-safe);
+#   2. acceptance  — builds and runs mods under Wine; needs the toolchain that
+#                    ./setup.sh installs. When the toolchain is absent the stage
+#                    is reported SKIPPED (exit 2), never silently passed: nothing
+#                    was executed, so nothing is claimed.
 set -u
 cd "$(dirname "$0")/.." || exit 1
-PASS=0; FAIL=0
+
+UNIT_RC=0
+PYTHON="${AWT_PYTHON:-python3}"
+echo "=== stage 1: unit tests (no Wine required) ==="
+"$PYTHON" tests/unit/run_unit.py || UNIT_RC=$?
+if [ -n "${AWT_UNIT_VENV:-}" ] && [ -x "$AWT_UNIT_VENV/bin/python" ]; then
+    echo "--- unit tests again with optional accelerators ($AWT_UNIT_VENV)"
+    "$AWT_UNIT_VENV/bin/python" tests/unit/run_unit.py || UNIT_RC=$?
+fi
+[ "$UNIT_RC" = 0 ] || { echo "unit tests FAILED"; exit 1; }
+
+echo "=== stage 2: Wine acceptance suite ==="
+TOOLCHAIN=$("$PYTHON" -c "
+from awt import builder, env
+ready, reason = env.toolchain_ready()
+print('ready' if ready and not builder.missing_toolchain() else 'missing')
+" 2>/dev/null || echo missing)
+
+PASS=0; FAIL=0; SKIP=0
 check() {  # check <name> <python-expr on report dict r>
     if python3 -c "
 import json,sys
@@ -14,6 +39,19 @@ sys.exit(0 if ($2) else 1)"; then
     fi
 }
 run() { ./run.sh "$1" ${2:+--seconds $2} >/dev/null 2>&1; }
+
+if [ "$TOOLCHAIN" != "ready" ]; then
+    cat <<'EOF'
+SKIPPED: wine/mingw/xvfb are not installed in this environment, so no mod was
+         compiled and no mod was executed. 14 acceptance checks are not run and
+         no claim is made about them. Install the toolchain (./setup.sh) on a
+         machine with package access and re-run, or use the CI workflow
+         .github/workflows/ci.yml which runs this stage on ubuntu-latest.
+EOF
+    SKIP=14
+    echo "---- unit passed; acceptance: $SKIP skipped (toolchain missing)"
+    exit 2
+fi
 
 run examples/hello-log.wh.cpp 4
 check "hello-log logs via Wh_Log" "'Hello from the sandbox' in ' '.join(r['run']['log'])"

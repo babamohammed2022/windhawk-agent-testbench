@@ -1,3 +1,24 @@
+# Sandbox: wine prefix, builds, logs, reports, history, reference clones, venv
 .sandbox/
+
+# Local caches: downloaded Microsoft PDBs/PEs, reference screenshots, indexes.
+# Microsoft binaries and images of Microsoft interfaces are NEVER committed.
+.cache/
+
+# Local, machine-specific configuration (VM paths, credentials-free endpoints,
+# per-user overrides). Templates are committed as *.example.yaml instead.
+*.local.yaml
+*.local.yml
+awt.local.*
+!awt.local.example.yaml
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Test/analysis scratch output
+.awt-out/
+*.diffmap.png
+coverage.xml
