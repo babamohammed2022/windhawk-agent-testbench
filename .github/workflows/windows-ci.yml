@@ -93,16 +93,24 @@ jobs:
                       Select-Object -Last 1).Line
           Write-Host "::notice::unit tests exit=$code | $summary"
           if ($code -ne 0) {
-            Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^(FAIL|=== FAIL|SKIP)|Traceback|Error" |
-              Select-Object -First 10 | ForEach-Object {
-                $line = ($_.Line -replace "%", "%25")
-                if ($line.Length -gt 300) { $line = $line.Substring(0, 300) }
-                Write-Host "::error::unit: $line"
+            # The names first, then the tracebacks of the first few failures. The
+            # suite's own `error:` lines are expected stderr from tests that
+            # assert refusals, so they are deliberately not annotated.
+            $names = (Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^=== FAIL (.+)$" |
+                      ForEach-Object { $_.Matches[0].Groups[1].Value }) -join ", "
+            if ($names.Length -gt 380) { $names = $names.Substring(0, 380) }
+            Write-Host "::error::failing tests on Windows: $names"
+            $blocks = Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^=== FAIL" -Context 0,13 |
+                      Select-Object -First 4
+            foreach ($block in $blocks) {
+              foreach ($line in (@($block.Line) + $block.Context.PostContext)) {
+                $clean = ($line -replace "%", "%25")
+                if ($clean.Length -gt 380) { $clean = $clean.Substring(0, 380) }
+                Write-Host "::error::$clean"
               }
-            Get-Content .sandbox/logs/unit-tests.log -Tail 5 | ForEach-Object {
-              $line = ($_ -replace "%", "%25")
-              Write-Host "::error::unit tail: $line"
             }
+            $skips = (Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^SKIP ").Count
+            Write-Host "::notice::$skips test(s) skipped on Windows (read the SKIP reasons in the artifact log)"
           }
           exit $code
 

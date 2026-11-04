@@ -46,7 +46,7 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "setup: exit=$code" >> .sandbox/steps.log
-          for tool in wine x86_64-w64-mingw32-g++ Xvfb; do
+          for tool in wine wine64 x86_64-w64-mingw32-g++ Xvfb; do
             if command -v "$tool" > /dev/null 2>&1; then
               echo "::notice::toolchain: $tool = $(command -v "$tool")"
             else
@@ -76,13 +76,17 @@ jobs:
                      | tr '\n' ' ' | tr -s ' ' | cut -c1-400 | sed 's/%/%25/g')
             echo "::warning::stage 2 SKIPPED (exit 2, an honest result, not a failure): $reason"
           elif [ "$code" != "0" ]; then
-            grep -n -E "^(FAIL|=== FAIL)|Traceback|error:" .sandbox/acceptance.log \
-              | head -n 8 | while IFS= read -r line; do
-                echo "::error::acceptance: $(printf '%s' "$line" | cut -c1-300 | sed 's/%/%25/g')"
+            # Only real failures: the suite's own `error:` lines are expected
+            # stderr from tests that assert refusals, so they are not annotated.
+            names=$(grep -E "^=== FAIL" .sandbox/acceptance.log | sed 's/^=== FAIL //' | paste -sd, - | cut -c1-380)
+            echo "::error::failing tests: ${names:-none matched, see the artifact log}"
+            awk '/^=== FAIL/{keep=14} keep>0{print; keep--}' .sandbox/acceptance.log \
+              | head -n 40 | while IFS= read -r line; do
+                echo "::error::$(printf '%s' "$line" | cut -c1-380 | sed 's/%/%25/g')"
               done
-            tail -n 5 .sandbox/acceptance.log | while IFS= read -r line; do
-              echo "::error::acceptance tail: $(printf '%s' "$line" | cut -c1-300 | sed 's/%/%25/g')"
-            done
+            if grep -qE "^SKIPPED: wine" .sandbox/acceptance.log; then
+              echo "::warning::stage 2 was skipped by the suite itself"
+            fi
           fi
           exit $code
 
