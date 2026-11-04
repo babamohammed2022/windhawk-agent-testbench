@@ -8,10 +8,31 @@ import subprocess
 from . import env, metadata
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CC = "x86_64-w64-mingw32-g++"
-CC_C = "x86_64-w64-mingw32-gcc"
-NM = "x86_64-w64-mingw32-nm"
-FILT = "x86_64-w64-mingw32-c++filt"
+def _tool(env_name, cross, native_candidates):
+    """Compiler/binutil name: explicit override, cross prefix, or native.
+
+    On Linux the bench cross-compiles with `x86_64-w64-mingw32-*`. On Windows the
+    same MinGW toolchain is usually installed without the prefix (MSYS2 mingw64,
+    or the mingw package a CI runner provides), so the native names are tried
+    too. `AWT_CXX` and friends always win: a user with a non-standard toolchain
+    should not have to edit this file.
+    """
+    override = os.environ.get(env_name)
+    if override:
+        return override
+    if os.name != "nt":
+        return cross
+    for candidate in native_candidates:
+        if env.which([candidate]):
+            return candidate
+    return cross
+
+
+CC = _tool("AWT_CXX", "x86_64-w64-mingw32-g++", ["g++", "clang++"])
+CC_C = _tool("AWT_CC", "x86_64-w64-mingw32-gcc", ["gcc", "clang"])
+NM = _tool("AWT_NM", "x86_64-w64-mingw32-nm", ["nm", "llvm-nm"])
+FILT = _tool("AWT_CXXFILT", "x86_64-w64-mingw32-c++filt",
+             ["c++filt", "llvm-cxxfilt"])
 
 BASE_LIBS = ["-lkernel32", "-luser32", "-lgdi32", "-ladvapi32", "-lshell32",
              "-lshlwapi", "-lole32", "-lcomctl32"]
@@ -40,9 +61,9 @@ def missing_toolchain() -> list:
     """
     missing = []
     for label, names in (("MinGW C++ compiler", [CC, "x86_64-w64-mingw32-clang++"]),
-                         ("MinGW C compiler", [CC_C]),
-                         ("MinGW nm", [NM]),
-                         ("MinGW c++filt", [FILT])):
+                         ("MinGW C compiler", [CC_C, "x86_64-w64-mingw32-gcc"]),
+                         ("MinGW nm", [NM, "x86_64-w64-mingw32-nm"]),
+                         ("MinGW c++filt", [FILT, "x86_64-w64-mingw32-c++filt"])):
         if not env.which(names):
             missing.append(label)
     return missing

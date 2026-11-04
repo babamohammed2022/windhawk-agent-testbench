@@ -20,6 +20,11 @@ if [ -n "${AWT_UNIT_VENV:-}" ] && [ -x "$AWT_UNIT_VENV/bin/python" ]; then
 fi
 [ "$UNIT_RC" = 0 ] || { echo "unit tests FAILED"; exit 1; }
 
+echo "=== stage 1b: which execution backends are available here ==="
+# Informational and never fatal: it records, in the same log as the acceptance
+# run, exactly what this machine was able to execute (Feature 2).
+"$PYTHON" -m awt.backends || echo "(the backend table could not be printed)"
+
 echo "=== stage 2: Wine acceptance suite ==="
 TOOLCHAIN=$("$PYTHON" -c "
 from awt import builder, env

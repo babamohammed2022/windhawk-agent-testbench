@@ -124,15 +124,36 @@ def _coerce_bool_keys(mini, other):
     return other
 
 
-def test_shipped_configs_parse_and_match_pyyaml():
-    """Every YAML file committed in this repo must parse with the bundled reader."""
-    configs = []
+def _repo_yaml():
+    """(bench configs, CI workflow files) among the YAML committed here.
+
+    The two groups are held to different standards on purpose. `configs/` and
+    anything else the bench reads must parse with the bundled dependency-free
+    reader. `.github/workflows/` is consumed by GitHub's parser, uses block
+    scalars (`run: |`) and other full-YAML features, and is not something
+    `yamlmini` claims to support - asserting otherwise would be a false claim
+    about the reader, so those files are checked with PyYAML instead.
+    """
+    bench, workflows = [], []
+    skip = (".git", ".sandbox", ".cache", "third_party", "__pycache__",
+            "node_modules", ".venv", "venv")
     for root, dirs, files in os.walk(REPO):
-        dirs[:] = [d for d in dirs if d not in (".git", ".sandbox", ".cache",
-                                                "third_party", "__pycache__", "node_modules")]
-        for f in files:
-            if f.endswith((".yaml", ".yml")):
-                configs.append(os.path.join(root, f))
+        dirs[:] = [d for d in dirs if d not in skip]
+        for name in files:
+            if not name.endswith((".yaml", ".yml")):
+                continue
+            path = os.path.join(root, name)
+            relative = os.path.relpath(path, REPO).replace(os.sep, "/")
+            if relative.startswith(".github/"):
+                workflows.append(path)
+            else:
+                bench.append(path)
+    return sorted(bench), sorted(workflows)
+
+
+def test_shipped_configs_parse_and_match_pyyaml():
+    """Every YAML file the bench itself reads must parse with the bundled reader."""
+    configs, _ = _repo_yaml()
     if not configs:
         raise SkipTest("no YAML configuration files committed yet")
     for path in configs:
@@ -142,3 +163,32 @@ def test_shipped_configs_parse_and_match_pyyaml():
         if pyyaml is not None:
             reference = _coerce_bool_keys(data, pyyaml.safe_load(text))
             assert data == reference, "yamlmini disagrees with PyYAML: %s" % path
+
+
+def test_vm_template_is_parseable_by_the_bundled_reader():
+    """`configs/vm.example.yaml` is read by yamlmini at runtime, so it must stay
+    inside the supported subset: no block scalars, no tabs."""
+    configs, _ = _repo_yaml()
+    template = [p for p in configs if p.endswith(os.path.join("configs",
+                                                              "vm.example.yaml"))]
+    assert template, "configs/vm.example.yaml must be committed"
+    text = open(template[0], encoding="utf-8").read()
+    assert "\t" not in text, "yamlmini does not accept tab indentation"
+    data = yamlmini.loads(text)
+    assert data["hypervisor"] and data["commands"]["start"], "template lost content"
+    assert isinstance(data["commands"]["start"], str), "the start command must parse"
+
+
+def test_workflow_yaml_is_valid_yaml():
+    """CI workflows are validated with a full YAML parser, when one is available."""
+    _, workflows = _repo_yaml()
+    if not workflows:
+        raise SkipTest("no workflow files committed")
+    if pyyaml is None:
+        raise SkipTest("PyYAML not installed: workflow YAML cannot be validated here")
+    for path in workflows:
+        with open(path, encoding="utf-8") as f:
+            doc = pyyaml.safe_load(f)
+        assert isinstance(doc, dict) and "jobs" in doc, path
+        for job in doc["jobs"].values():
+            assert isinstance(job.get("steps"), list) and job["steps"], path

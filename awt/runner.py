@@ -9,6 +9,7 @@ import time
 
 from . import analyzer, builder, report
 from . import env as host_env
+from . import verdict
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SANDBOX = os.path.join(REPO, ".sandbox")
@@ -239,29 +240,16 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
     modlog = open(mod_log, errors="replace").read() if os.path.exists(mod_log) else ""
     stublog = open(stub_log, errors="replace").read() if os.path.exists(stub_log) else ""
 
-    # ---- parse host markers
-    m = re.search(r"\[awt-host\] load failed err=(\d+)", out)
-    load_failed = bool(m)
-    m = re.search(r"\[awt-host\] init returned (-?\d+)", out) or \
-        re.search(r"autoinit returned (\d+)", modlog)
-    init_ret = int(m.group(1)) if m else None
-    m = re.search(r"\[awt-host\] hooks applied count (\d+)", out) or \
-        re.search(r"hooks applied (\d+)", modlog)
-    hooks_applied = int(m.group(1)) if m else 0
-    if init_ret != 1:
-        hooks_applied = 0
-    m = re.search(r"\[awt-host\] target exit code (\d+)", out)
-    target_exit = int(m.group(1)) if m else None
-    crashed = (re.search(r"unhandled (exception|page fault)", out, re.I) is not None or
-               re.search(r"wine:.*crash", out, re.I) is not None or
-               (target_exit is not None and target_exit >= 0xC0000000))
+    # ---- parse host markers (shared with the native Windows backend so both
+    #      reach the same verdict from the same output: awt/verdict.py)
+    markers = verdict.parse_host_markers(out, modlog)
+    load_failed = markers["load_failed"]
+    init_ret = markers["init_returned_code"]
+    hooks_applied = markers["hooks_applied"]
+    target_exit = markers["target_exit_code"]
+    crashed = markers["crashed"]
     exit_code = proc.returncode if not timed_out else None
-
-    hooks_fired = {}
-    for name in ana["public_hooks"]:
-        n = len(re.findall(re.escape(name) + r"[:\(]", modlog))
-        if n:
-            hooks_fired[name] = n
+    hooks_fired = verdict.count_hooks_fired(modlog, ana["public_hooks"])
 
     if fallback_reason:
         rep["_fallback_reason"] = fallback_reason
@@ -272,48 +260,11 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
             entry["fallback_reason"] = fallback_reason
             entry["target_used"] = "awt-host(self)"
             entry["injection_method"] = "in-process LoadLibraryW"
-    rep["run"].update({
-        "backend": "wine",
-        "target": "awt-host.exe (self)" if mode == "self" else target,
-        "init_returned": (init_ret == 1) if init_ret is not None else None,
-        "hooks_applied": hooks_applied,
-        "hooks_fired": hooks_fired,
-        "crashed": crashed,
-        "exit_code": exit_code,
-        "timed_out": timed_out,
-        "log": [l.rstrip("\r\n") for l in modlog.splitlines()][:200],
-    })
-    rep["shim"]["not_implemented_called"] = sorted(set(stublog.split()))
-    if ana["internal_hooks"] or ana["internal_modules"]:
-        rep["shim"]["simulated_with_limits"] += ["Wh_FindFirstSymbol", "Wh_HookSymbols"]
-
-    # ---- verdict
-    if load_failed or init_ret in (0, 2, 3, 5, 6, 7):
-        rep["verdict"]["level"] = "load_failed"
-    elif crashed:
-        rep["verdict"]["level"] = "crashed"
-    elif hooks_fired:
-        rep["verdict"]["level"] = "public_hooks_verified"
-    else:
-        rep["verdict"]["level"] = "loads_no_crash"
-    verified = ["build"]
-    if not load_failed and init_ret == 1:
-        verified.append("load")
-    if hooks_fired:
-        verified.append("public API hooks")
-    rep["verdict"]["verified"] = verified
-    not_verifiable = []
-    for s in ana["internal_hooks"]:
-        not_verifiable.append("internal-symbols: %s" % s)
-    for mod in ana["internal_modules"]:
-        not_verifiable.append("internal-module: %s" % mod)
-    rep["verdict"]["not_verifiable_here"] = sorted(set(not_verifiable))
-    rep["verdict"]["requires_real_windows"] = bool(not_verifiable)
-    rep["verdict"]["summary"] = (
-        "level=%s; verified=%s; not verifiable here=%s" %
-        (rep["verdict"]["level"], ", ".join(verified) or "nothing",
-         ", ".join(sorted(set(not_verifiable))) or "nothing"))
-    rep["artifacts"]["wine_log"] = run_log
-    if shot and os.path.exists(shot):
-        rep["artifacts"]["screenshots"] = [shot]
+    verdict.apply_run_result(
+        rep, ana, markers, hooks_fired, exit_code=exit_code, timed_out=timed_out,
+        run_log=run_log, screenshot=(shot if shot and os.path.exists(shot) else None),
+        stub_log=stublog, mode=mode,
+        target="awt-host.exe (self)" if mode == "self" else target)
+    rep["run"]["backend"] = "wine"
+    rep["run"]["log"] = [l.rstrip("\r\n") for l in modlog.splitlines()][:200]
     return report.finish(rep, hist)

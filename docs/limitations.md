@@ -64,3 +64,36 @@
     PE through winbindex or the pinned table; a machine with a different cumulative
     update can differ. The report records which binary was used (version, timestamp,
     size, PDB GUID) so the claim can be checked.
+
+## Added by Feature 2 (execution backends), observed 2026-11-04
+
+16. **No native Windows run happened in the development sandbox.** The
+    `windows-runner` backend is implemented and unit-tested for its environment
+    detection, refusal to run off Windows and `not_executed` reporting on Linux; its
+    native execution path is exercised only by `.github/workflows/windows-ci.yml`. Read
+    that check run for evidence, not this repository.
+17. **GitHub-hosted Windows runners are Windows Server.** `windows-latest` is build
+    20348 (Server 2022): no immersive taskbar, no Start-menu experience, a different
+    explorer. Shell-related outcomes from CI are marked `indicative` in the report and
+    are not evidence about a user's desktop. Build 26100 is deliberately reported as
+    `shell_profile: unknown` when `ProductType` is unavailable, because it is both
+    Windows 11 24H2 and Windows Server 2025.
+18. **Running on real Windows does not make the shim the Windhawk engine.** The mod is
+    still loaded by `host/host.cpp` through the bench's shim: public API hooks are real
+    function hooks in a real Windows process, but `Wh_FindFirstSymbol`/`HookSymbols`
+    resolution is still the shim's, so internal-symbol mods stay `not_verifiable_here`
+    on every backend. There is no injection into `explorer.exe` or
+    `twinui.pcshell.dll`, so a taskbar mod's *effect on the taskbar* is not observed
+    anywhere.
+19. **The self-hosted VM backend has never driven a real VM in this project.** It is
+    tested end to end against `tests/unit/fixtures/fake_vm.py`, which plays the
+    hypervisor and the in-guest agent, including never booting, heartbeating without
+    finishing, a failed snapshot revert, a guest crash and a truncated screenshot. A
+    user's QEMU/VirtualBox/Hyper-V configuration is theirs to validate; the report says
+    what the guest reported, and `not_executed` with the expired timeout when the guest
+    never answered.
+20. **Screenshots are evidence only when they are real.** A capture that is a single
+    colour (what a service/session-0 desktop produces) is flagged in the report rather
+    than presented as a desktop; a file whose magic bytes do not match its extension is
+    reported as unavailable. No screenshot of a Microsoft interface is committed to this
+    repository.

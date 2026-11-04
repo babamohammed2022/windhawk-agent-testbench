@@ -1,0 +1,134 @@
+name: windows-ci
+
+# Feature 2's CI backend: compile and run a mod in a NATIVE Windows process and
+# publish the report (and a screenshot) as artifacts.
+#
+# Read this before trusting a green check:
+#
+# * `windows-latest` is **Windows Server** (build 20348). Its shell is not the
+#   client Windows shell, so shell-related outcomes are marked *indicative* in
+#   `verdict.indicative` and in the step summary - never "verified".
+# * The mod is loaded by this bench's shim host, not by the Windhawk engine, so
+#   internal symbol hooks stay `not_verifiable_here` even here.
+# * A mod that fails to build or run does NOT fail this job: the verdict lives in
+#   the artifact, and the job only fails if the harness itself breaks. That is
+#   deliberate - "the mod crashed" is a result, not an infrastructure error.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mod:
+        description: "Mod source to build and run (path in the repository)"
+        required: false
+        default: "examples/hello-log.wh.cpp"
+      seconds:
+        description: "How long the mod stays loaded"
+        required: false
+        default: "6"
+      screenshot:
+        description: "Capture the desktop after the run"
+        required: false
+        default: "true"
+  pull_request:
+    paths:
+      - "awt/**"
+      - "shim/**"
+      - "host/**"
+      - "targets/**"
+      - "examples/**"
+      - "tests/**"
+      - ".github/workflows/windows-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "awt/**"
+      - "shim/**"
+      - "host/**"
+      - ".github/workflows/windows-ci.yml"
+
+jobs:
+  native-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: unit tests (no Windows-specific tooling needed)
+        run: python tests/unit/run_unit.py
+
+      - name: locate a native MinGW toolchain
+        shell: pwsh
+        run: |
+          $found = $null
+          foreach ($dir in @("C:\msys64\ucrt64\bin", "C:\msys64\mingw64\bin",
+                             "C:\mingw64\bin", "C:\ProgramData\mingw64\bin")) {
+            if (Test-Path (Join-Path $dir "g++.exe")) { $found = $dir; break }
+          }
+          if (-not $found) {
+            $onPath = Get-Command g++ -ErrorAction SilentlyContinue
+            if ($onPath) { $found = Split-Path -Parent $onPath.Source }
+          }
+          if ($found) {
+            Write-Host "MinGW toolchain: $found"
+            $found | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            # awt/builder.py honours these instead of assuming a cross prefix
+            "AWT_CXX=g++"     | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "AWT_CC=gcc"      | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "AWT_NM=nm"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "AWT_CXXFILT=c++filt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Host "::warning::no MinGW toolchain found - the run will report not_executed"
+          }
+
+      - name: what can this machine execute? (backend capabilities)
+        shell: pwsh
+        run: |
+          python -m awt.backends.windows_ci --selftest
+          New-Item -ItemType Directory -Force -Path .sandbox | Out-Null
+          python -m awt.backends --list-json | Out-File -FilePath .sandbox/backends.json -Encoding utf8
+
+      - name: build and run the mod natively
+        id: runmod
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $mod = "${{ github.event.inputs.mod }}"
+          if (-not $mod) { $mod = "examples/hello-log.wh.cpp" }
+          $seconds = "${{ github.event.inputs.seconds }}"
+          if (-not $seconds) { $seconds = "6" }
+          $arguments = @("-m", "awt.backends.windows_ci", "--mod", $mod,
+                         "--seconds", $seconds, "--json", ".sandbox/windows-report.json")
+          if ("${{ github.event.inputs.screenshot }}" -ne "false") {
+            $arguments += "--screenshot"
+          }
+          Write-Host "python $($arguments -join ' ')"
+          python @arguments
+
+      - name: step summary (honest, including what was NOT verified)
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path .sandbox/windows-report.json) {
+            python -m awt.backends.windows_ci --summary .sandbox/windows-report.json |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            "## Native Windows run: no report`n`nThe harness did not produce a report; see the job log." |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+
+      - name: upload report, capabilities and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-report
+          path: |
+            .sandbox/windows-report.json
+            .sandbox/backends.json
+            .sandbox/logs/screenshot-native-*.png
+            .sandbox/logs/native-run.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -65,6 +65,30 @@ Reference clones and the venv live in `.sandbox/` (git-ignored). Machine-specifi
 overrides go in `configs/symbol-matrix.local.yaml`. Only `configs/symbol-matrix.yaml`,
 which holds public metadata (version strings, PE timestamps and sizes), is committed.
 
+## 4c. Choosing an execution backend (and not over-claiming from it)
+```bash
+python3 -m awt.backends                                # availability + reasons, per backend
+python3 -m awt.backends --backend windows-runner --mod mod.wh.cpp --screenshot
+python3 -m awt.backends --backend self-hosted-vm --mod mod.wh.cpp   # needs configs/vm.local.yaml
+python3 -m awt.backends.windows_ci --selftest          # what a Windows box can do here
+```
+Read `run.environment` before you quote any result:
+* `shell_profile: client` — a workstation Windows shell. The strongest environment this
+  bench can reach (self-hosted VM with a client edition).
+* `shell_profile: server` — Windows Server, including **every GitHub-hosted Windows
+  runner**. `verdict.indicative` says so in words. Never write "verified on Windows" for
+  a taskbar/Start-menu/notification mod from a CI run; write "compiles, loads and does
+  not crash on Windows Server 2022; the shell itself was not exercised".
+* `shell_profile: wine` — simulated. Not indicative, not verified: it is not Windows.
+* `shell_profile: unknown` — the environment could not be identified. Report that.
+`verdict.indicative` never downgrades `verdict.level`; it qualifies it. Quote both.
+A backend that cannot run produces `level: not_executed` with a reason and exit code 3 —
+do not re-run it in a loop hoping for a different answer, and never present a
+`not_executed` report as a passing one. VM configuration is local and git-ignored
+(`configs/vm.local.yaml`, or `$AWT_VM_CONFIG`); no image path, snapshot name or
+credential is committed. Protocol: `docs/vm-protocol.md`; VMs worth building:
+`docs/reference-vms.md`.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.

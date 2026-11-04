@@ -8,13 +8,78 @@ jobs:
       - uses: actions/checkout@v4
       - name: setup (wine, mingw, xvfb, minhook)
         run: ./setup.sh
+      # The suite is allowed to fail here so that the diagnosis below is always
+      # published; the job still fails at the end when the suite failed. Job logs
+      # expire and are not always reachable, the step summary is.
       - name: acceptance suite
-        run: bash tests/run_tests.sh
+        id: acceptance
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bash tests/run_tests.sh 2>&1 | tee .sandbox/acceptance.log
       - name: conformance table
+        if: always()
         run: python3 -m awt.conformance
+      - name: publish an honest step summary
+        if: always()
+        run: |
+          {
+            echo "## ubuntu acceptance run (Wine backend)"
+            echo
+            echo "exit code of tests/run_tests.sh: ${{ steps.acceptance.outcome }}"
+            echo "(0 = ran and passed, 2 = stage 2 skipped because Wine/MinGW are unusable)"
+            echo
+            if [ -f .sandbox/acceptance.log ]; then
+              echo '### failures'
+              echo '```'
+              grep -n -E "FAIL|SKIP|Traceback|error:|Error" .sandbox/acceptance.log | head -n 40 || echo "(none)"
+              echo '```'
+              echo
+              echo '### last 120 lines'
+              echo '```'
+              tail -n 120 .sandbox/acceptance.log
+              echo '```'
+            else
+              echo "no log was produced"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .sandbox/report.json ]; then
+            python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          rep = json.load(open(".sandbox/report.json"))
+          v = rep.get("verdict", {})
+          run = rep.get("run", {})
+          env = run.get("environment") or {}
+          print("### report.json")
+          print()
+          print("| field | value |")
+          print("| --- | --- |")
+          for label, value in (("mod", (rep.get("mod") or {}).get("id")),
+                               ("level", v.get("level")),
+                               ("backend", run.get("backend")),
+                               ("shell profile", env.get("shell_profile")),
+                               ("verified", ", ".join(v.get("verified") or []) or "nothing"),
+                               ("not verifiable here",
+                                ", ".join(v.get("not_verifiable_here") or []) or "nothing"),
+                               ("indicative", "; ".join(v.get("indicative") or []) or "none")):
+              print("| %s | `%s` |" % (label, value))
+          print()
+          print("summary: `%s`" % v.get("summary"))
+          if v.get("not_executed_reason"):
+              print()
+              print("**nothing was executed:** %s" % v["not_executed_reason"])
+          PY
+          fi
+      - name: fail the job when the suite failed
+        if: always() && steps.acceptance.outcome != 'success'
+        run: |
+          echo "tests/run_tests.sh did not succeed; see the step summary above"
+          exit 1
       - name: upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: awt-report
-          path: .sandbox/report.json
+          path: |
+            .sandbox/report.json
+            .sandbox/acceptance.log
