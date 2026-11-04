@@ -49,10 +49,23 @@ jobs:
           for tool in wine wine64 x86_64-w64-mingw32-g++ Xvfb; do
             if command -v "$tool" > /dev/null 2>&1; then
               echo "::notice::toolchain: $tool = $(command -v "$tool")"
-            else
-              echo "::warning::toolchain: $tool is NOT available after setup.sh"
             fi
           done
+          # Ask the bench, not the PATH: setup.sh also accepts Wine at
+          # /usr/lib/wine/wine64, and env.toolchain_ready() is what stage 2 uses
+          # to decide whether it can run at all.
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, os.getcwd())
+          from awt import builder, env
+          wine = env.find_wine()
+          ready, reason = env.toolchain_ready()
+          missing = builder.missing_toolchain()
+          print("::notice::bench toolchain: wine=%s xvfb=%s ready=%s missing=%s"
+                % (wine, env.which(["Xvfb"]), ready, missing or "none"))
+          if not ready:
+              print("::warning::stage 2 will be SKIPPED because: %s" % reason)
+          PY
           if [ "$code" != "0" ]; then
             echo "::error::setup.sh failed with exit code $code (see .sandbox/logs/setup.log in the artifact)"
           fi

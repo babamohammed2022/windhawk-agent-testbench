@@ -19,13 +19,54 @@ def test_levels_are_ordered_and_documented():
 
 
 def test_missing_toolchain_reported_structurally():
+    """Both sides of the toolchain question: absent means "not attempted", present
+    means the build was really attempted (a CI runner has MinGW; this sandbox does
+    not, and the assertion must be honest in both places)."""
     missing = builder.missing_toolchain()
     result = builder.build(os.path.join(REPO, "examples", "hello-log.wh.cpp"))
-    assert result["ok"] is False
-    assert result["toolchain_missing"] == missing
     if missing:
+        assert result["ok"] is False
+        assert result["toolchain_missing"] == missing
         assert "build not attempted" in result["errors"][0]["message"]
         assert "nothing was compiled or executed" in result["errors"][0]["message"]
+    else:
+        assert not result.get("toolchain_missing"), (
+            "a machine with a toolchain must not report one missing: %r"
+            % result.get("toolchain_missing"))
+        assert result["ok"] is True or result["errors"], (
+            "with a toolchain the build is attempted and reports a real outcome")
+
+
+def test_missing_runtime_is_checked_before_anything_is_executed():
+    """Compiling is not running. Without Wine and a headless display - and on
+    Windows at all - `runner.run()` must report not_executed instead of crashing
+    inside `subprocess.Popen(["Xvfb", ...])`."""
+    absent = runner.missing_runtime()
+    if os.name == "nt":
+        assert absent and "windows-runner" in absent[0], (
+            "on Windows the reason must point at the backend that can run: %r" % absent)
+    else:
+        assert isinstance(absent, list)
+        for name in absent:
+            assert name in ("wine", "Xvfb"), "unexpected runtime requirement: %r" % name
+    real = runner.missing_runtime
+    runner.missing_runtime = lambda: ["wine (simulated absence)"]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            rep = runner.run(os.path.join(REPO, "examples", "hello-log.wh.cpp"))
+    finally:
+        runner.missing_runtime = real
+    if builder.missing_toolchain():
+        assert "simulated absence" not in rep["verdict"].get("not_executed_reason", ""), (
+            "without a compiler the toolchain reason comes first, which is also honest")
+        return
+    verdict_block = rep["verdict"]
+    assert verdict_block["level"] == "not_executed", verdict_block["level"]
+    assert "simulated absence" in verdict_block["not_executed_reason"]
+    assert verdict_block["verified"] == [], "nothing ran, nothing is verified"
+    assert verdict_block["requires_real_windows"] is False, (
+        "not_executed makes no claim at all")
+    assert rep["run"]["backend"] == "unavailable"
 
 
 def test_runner_reports_not_executed_when_toolchain_absent():

@@ -59,6 +59,24 @@ def _execute(cmd, env, run_log, seconds, screenshot=False):
     return proc, timed_out, shot
 
 
+def missing_runtime():
+    """What the Wine backend needs at run time, and does not have here.
+
+    A working compiler is not enough to run a mod: this backend needs Wine and a
+    headless display. On Windows neither exists, and discovering that inside
+    `subprocess.Popen(["Xvfb", ...])` would be a crash instead of an answer.
+    """
+    if os.name == "nt":
+        return ["the Wine backend does not run on Windows (use the windows-runner "
+                "backend: python3 -m awt.backends)"]
+    missing = []
+    if not host_env.find_wine():
+        missing.append("wine")
+    if not host_env.which(["Xvfb"]):
+        missing.append("Xvfb")
+    return missing
+
+
 def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
         symbols=None):
     started = time.time()
@@ -95,6 +113,20 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
         else:
             rep["verdict"]["level"] = "build_failed"
             rep["verdict"]["summary"] = "build failed: %d error(s)" % len(b["errors"])
+        return report.finish(rep, hist)
+
+    # It compiled, but compiling is not running. If this machine cannot execute
+    # it, say so with the same shape as a missing toolchain: level=not_executed,
+    # run.backend=unavailable, nothing verified.
+    absent = missing_runtime()
+    if absent:
+        reason = ("no execution backend available in this environment: %s; the mod "
+                  "was compiled but not run" % ", ".join(absent))
+        rep["verdict"]["level"] = "not_executed"
+        rep["verdict"]["not_executed_reason"] = reason
+        rep["run"]["backend"] = "unavailable"
+        rep["run"]["reason"] = reason
+        rep["verdict"]["summary"] = "level=not_executed; %s" % reason
         return report.finish(rep, hist)
 
     # ---- include analysis (section 3.3, v1: honest simulation mapping)
