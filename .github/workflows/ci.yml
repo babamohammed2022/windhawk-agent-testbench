@@ -1,36 +1,163 @@
 name: ci
+
+# Two jobs, two honest questions:
+#
+#   bench           - does the suite pass on Linux, and if stage 2 could not run,
+#                     does the job SAY so instead of pretending?
+#   (windows-ci.yml) - does a mod compile and load in a native Windows process?
+#
+# Diagnosis policy: job logs expire and are not always reachable, and a step
+# summary cannot be read back through the API from a sandbox. Workflow
+# ANNOTATIONS (::notice::, ::warning::, ::error::) can, so every step that can
+# fail publishes its outcome as an annotation, and the log files are uploaded as
+# artifacts with `if: always()`.
+#
+# Exit-code policy for tests/run_tests.sh:
+#   0 = everything ran and passed
+#   1 = a real failure
+#   2 = stage 2 was SKIPPED because Wine/MinGW are unusable here. That is an
+#       honest result, published as a warning, and it does not fail the job.
+
 on: [push, pull_request]
+
 jobs:
   bench:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: start a diagnosis log
+        run: |
+          mkdir -p .sandbox/logs
+          {
+            echo "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+            echo "sha: ${{ github.sha }}"
+            echo "runner: ${{ runner.os }} ${{ runner.image }}"
+            echo "python: $(python3 -V 2>&1)"
+          } > .sandbox/steps.log
+          echo "::notice::bench job started on ${{ runner.image }}"
+
       - name: setup (wine, mingw, xvfb, minhook)
-        run: ./setup.sh
-      # The suite is allowed to fail here so that the diagnosis below is always
-      # published; the job still fails at the end when the suite failed. Job logs
-      # expire and are not always reachable, the step summary is.
+        id: setup
+        run: |
+          set +e
+          ./setup.sh 2>&1 | tee .sandbox/logs/setup.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "setup: exit=$code" >> .sandbox/steps.log
+          for tool in wine x86_64-w64-mingw32-g++ Xvfb; do
+            if command -v "$tool" > /dev/null 2>&1; then
+              echo "::notice::toolchain: $tool = $(command -v "$tool")"
+            else
+              echo "::warning::toolchain: $tool is NOT available after setup.sh"
+            fi
+          done
+          if [ "$code" != "0" ]; then
+            echo "::error::setup.sh failed with exit code $code (see .sandbox/logs/setup.log in the artifact)"
+          fi
+          exit $code
+
+      # The suite is allowed to fail here so that the diagnosis is always
+      # published; the job still fails at the end when the suite really failed.
       - name: acceptance suite
         id: acceptance
         continue-on-error: true
         run: |
-          set -o pipefail
+          set +e
           bash tests/run_tests.sh 2>&1 | tee .sandbox/acceptance.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "acceptance: exit=$code" >> .sandbox/steps.log
+          unit=$(grep -E "^---- unit" .sandbox/acceptance.log | tail -n 1 | tr -d '\r')
+          echo "::notice::tests/run_tests.sh exit=$code | ${unit:-no unit summary found}"
+          if [ "$code" = "2" ]; then
+            reason=$(grep -A 3 "SKIPPED:" .sandbox/acceptance.log | head -n 4 \
+                     | tr '\n' ' ' | tr -s ' ' | cut -c1-400 | sed 's/%/%25/g')
+            echo "::warning::stage 2 SKIPPED (exit 2, an honest result, not a failure): $reason"
+          elif [ "$code" != "0" ]; then
+            grep -n -E "^(FAIL|=== FAIL)|Traceback|error:" .sandbox/acceptance.log \
+              | head -n 8 | while IFS= read -r line; do
+                echo "::error::acceptance: $(printf '%s' "$line" | cut -c1-300 | sed 's/%/%25/g')"
+              done
+            tail -n 5 .sandbox/acceptance.log | while IFS= read -r line; do
+              echo "::error::acceptance tail: $(printf '%s' "$line" | cut -c1-300 | sed 's/%/%25/g')"
+            done
+          fi
+          exit $code
+
       - name: conformance table
+        id: conformance
         if: always()
-        run: python3 -m awt.conformance
+        continue-on-error: true
+        run: |
+          set +e
+          python3 -m awt.conformance 2>&1 | tee .sandbox/logs/conformance.log
+          code=${PIPESTATUS[0]}
+          echo "conformance: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            echo "::error::python3 -m awt.conformance failed with exit code $code"
+          else
+            echo "::notice::conformance table regenerated ($(wc -l < .sandbox/logs/conformance.log) lines)"
+          fi
+          exit $code
+
+      - name: visual comparison self-check
+        id: visual
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 - <<'PY' 2>&1 | tee .sandbox/logs/visual-selfcheck.log
+          """Compare two generated screenshots: the machinery, on the runner."""
+          import os, sys, tempfile
+          sys.path.insert(0, os.getcwd())
+          from tests.unit.fixtures import images
+          from awt.visualdiff.cli import main
+          tmp = tempfile.mkdtemp(prefix="awt-ci-visual-")
+          base = images.desktop()
+          reference = images.write(base, tmp, "reference.png")
+          same = images.write(base, tmp, "same.png")
+          moved = images.write(images.shift(base, (40, 20, 120, 60), 2, 1), tmp, "moved.png")
+          identical = main([same, reference, "--quiet"])
+          shifted = main([moved, reference, "--quiet",
+                          "--diffmap", os.path.join(tmp, "diff.png")])
+          print("identical pair ->", identical, "(expected 0)")
+          print("shifted pair   ->", shifted, "(expected 1)")
+          print("artifacts      ->", sorted(os.listdir(tmp)))
+          problems = []
+          if identical != 0:
+              problems.append("an identical pair did not match (exit %d)" % identical)
+          if shifted != 1:
+              problems.append("a shifted window did not mismatch (exit %d)" % shifted)
+          if not os.path.exists(os.path.join(tmp, "diff.png")):
+              problems.append("no difference map was written")
+          for problem in problems:
+              print("PROBLEM:", problem)
+          raise SystemExit(1 if problems else 0)
+          PY
+          code=${PIPESTATUS[0]}
+          echo "visual: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            echo "::error::the visual comparison self-check failed (exit $code)"
+          else
+            echo "::notice::visual comparison self-check: $(grep -c . .sandbox/logs/visual-selfcheck.log) lines, exit 0"
+          fi
+
       - name: publish an honest step summary
         if: always()
         run: |
           {
             echo "## ubuntu acceptance run (Wine backend)"
             echo
-            echo "exit code of tests/run_tests.sh: ${{ steps.acceptance.outcome }}"
-            echo "(0 = ran and passed, 2 = stage 2 skipped because Wine/MinGW are unusable)"
+            echo "| step | exit code | meaning |"
+            echo "| --- | --- | --- |"
+            echo "| setup.sh | \`${{ steps.setup.outputs.code }}\` | toolchain install |"
+            echo "| tests/run_tests.sh | \`${{ steps.acceptance.outputs.code }}\` | 0 = passed, 1 = failed, 2 = stage 2 honestly skipped |"
+            echo "| awt.conformance | \`${{ steps.conformance.outputs.code }}\` | shim conformance table |"
             echo
             if [ -f .sandbox/acceptance.log ]; then
-              echo '### failures'
+              echo '### failures and skips'
               echo '```'
               grep -n -E "FAIL|SKIP|Traceback|error:|Error" .sandbox/acceptance.log | head -n 40 || echo "(none)"
               echo '```'
@@ -70,12 +197,37 @@ jobs:
               print("**nothing was executed:** %s" % v["not_executed_reason"])
           PY
           fi
-      - name: fail the job when the suite failed
-        if: always() && steps.acceptance.outcome != 'success'
+
+      - name: fail the job only when something really failed
+        if: always()
+        env:
+          SETUP: ${{ steps.setup.outputs.code }}
+          SUITE: ${{ steps.acceptance.outputs.code }}
+          CONFORMANCE: ${{ steps.conformance.outputs.code }}
+          VISUAL: ${{ steps.visual.outcome }}
         run: |
-          echo "tests/run_tests.sh did not succeed; see the step summary above"
-          exit 1
-      - name: upload report
+          failed=0
+          case "$SUITE" in
+            0) echo "::notice::the acceptance suite ran and passed";;
+            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 14 acceptance checks did not run and no claim is made about them";;
+            "") echo "::error::tests/run_tests.sh produced no exit code - the step did not run"; failed=1;;
+            *) echo "::error::tests/run_tests.sh failed with exit code $SUITE"; failed=1;;
+          esac
+          if [ -n "$SETUP" ] && [ "$SETUP" != "0" ]; then
+            echo "::error::setup.sh failed with exit code $SETUP"; failed=1
+          fi
+          if [ -n "$CONFORMANCE" ] && [ "$CONFORMANCE" != "0" ]; then
+            echo "::error::awt.conformance failed with exit code $CONFORMANCE"; failed=1
+          fi
+          if [ "$VISUAL" = "failure" ]; then
+            echo "::error::the visual comparison self-check failed"; failed=1
+          fi
+          if [ "$failed" != "0" ]; then
+            echo "--- .sandbox/steps.log ---"; cat .sandbox/steps.log 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: upload report and diagnosis
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -83,3 +235,9 @@ jobs:
           path: |
             .sandbox/report.json
             .sandbox/acceptance.log
+            .sandbox/steps.log
+            .sandbox/logs/setup.log
+            .sandbox/logs/conformance.log
+            .sandbox/logs/visual-selfcheck.log
+          if-no-files-found: warn
+          retention-days: 30

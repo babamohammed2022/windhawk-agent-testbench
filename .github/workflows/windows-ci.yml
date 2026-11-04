@@ -13,6 +13,14 @@ name: windows-ci
 # * A mod that fails to build or run does NOT fail this job: the verdict lives in
 #   the artifact, and the job only fails if the harness itself breaks. That is
 #   deliberate - "the mod crashed" is a result, not an infrastructure error.
+#
+# Diagnosis policy: this job once failed with "no files were found with the
+# provided path" and nothing else readable - the report had not been produced at
+# all, and the logs were not reachable. So every step now (a) appends a marker to
+# `.sandbox/steps.log`, (b) publishes its outcome as a workflow ANNOTATION, which
+# is readable through the check-runs API after the logs expire, and (c) keeps
+# going on error so the markers show exactly where it stopped. The final step
+# fails the job only for harness breakage.
 
 on:
   workflow_dispatch:
@@ -57,12 +65,52 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: unit tests (no Windows-specific tooling needed)
-        run: python tests/unit/run_unit.py
-
-      - name: locate a native MinGW toolchain
+      - name: start a diagnosis log
         shell: pwsh
         run: |
+          $ErrorActionPreference = "continue"
+          New-Item -ItemType Directory -Force -Path .sandbox/logs | Out-Null
+          $os = (Get-CimInstance Win32_OperatingSystem)
+          @(
+            "run: $env:GITHUB_RUN_ID attempt $env:GITHUB_RUN_ATTEMPT",
+            "sha: $env:GITHUB_SHA",
+            "os: $($os.Caption) build $($os.BuildNumber) productType $($os.ProductType)",
+            "python: $(python -V 2>&1)",
+            "cwd: $(Get-Location)"
+          ) | Out-File -FilePath .sandbox/steps.log -Encoding utf8
+          Write-Host "::notice::native Windows job on $($os.Caption) build $($os.BuildNumber)"
+
+      - name: unit tests (no Windows-specific tooling needed)
+        id: unit
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "continue"
+          python tests/unit/run_unit.py *>&1 | Tee-Object -FilePath .sandbox/logs/unit-tests.log
+          $code = $LASTEXITCODE
+          "unit: exit=$code" | Out-File -FilePath .sandbox/steps.log -Append -Encoding utf8
+          $summary = (Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^---- unit" |
+                      Select-Object -Last 1).Line
+          Write-Host "::notice::unit tests exit=$code | $summary"
+          if ($code -ne 0) {
+            Select-String -Path .sandbox/logs/unit-tests.log -Pattern "^(FAIL|=== FAIL|SKIP)|Traceback|Error" |
+              Select-Object -First 10 | ForEach-Object {
+                $line = ($_.Line -replace "%", "%25")
+                if ($line.Length -gt 300) { $line = $line.Substring(0, 300) }
+                Write-Host "::error::unit: $line"
+              }
+            Get-Content .sandbox/logs/unit-tests.log -Tail 5 | ForEach-Object {
+              $line = ($_ -replace "%", "%25")
+              Write-Host "::error::unit tail: $line"
+            }
+          }
+          exit $code
+
+      - name: locate a native MinGW toolchain
+        id: toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "continue"
           $found = $null
           foreach ($dir in @("C:\msys64\ucrt64\bin", "C:\msys64\mingw64\bin",
                              "C:\mingw64\bin", "C:\ProgramData\mingw64\bin")) {
@@ -74,28 +122,45 @@ jobs:
           }
           if ($found) {
             Write-Host "MinGW toolchain: $found"
+            Write-Host "::notice::MinGW toolchain found at $found"
             $found | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
             # awt/builder.py honours these instead of assuming a cross prefix
             "AWT_CXX=g++"     | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
             "AWT_CC=gcc"      | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
             "AWT_NM=nm"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
             "AWT_CXXFILT=c++filt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "toolchain: found=$found" | Out-File -FilePath .sandbox/steps.log -Append -Encoding utf8
           } else {
-            Write-Host "::warning::no MinGW toolchain found - the run will report not_executed"
+            Write-Host "::warning::no MinGW toolchain found - the run will report build_failed or not_executed, and that is the honest result"
+            "toolchain: found=none" | Out-File -FilePath .sandbox/steps.log -Append -Encoding utf8
           }
 
       - name: what can this machine execute? (backend capabilities)
+        id: capabilities
+        continue-on-error: true
         shell: pwsh
         run: |
-          python -m awt.backends.windows_ci --selftest
-          New-Item -ItemType Directory -Force -Path .sandbox | Out-Null
-          python -m awt.backends --list-json | Out-File -FilePath .sandbox/backends.json -Encoding utf8
+          $ErrorActionPreference = "continue"
+          python -m awt.backends.windows_ci --selftest *>&1 |
+            Tee-Object -FilePath .sandbox/logs/selftest.log
+          $code = $LASTEXITCODE
+          python -m awt.backends --list-json *>&1 |
+            Out-File -FilePath .sandbox/backends.json -Encoding utf8
+          "capabilities: selftest exit=$code backends.json=$((Test-Path .sandbox/backends.json))" |
+            Out-File -FilePath .sandbox/steps.log -Append -Encoding utf8
+          if ($code -ne 0) {
+            Write-Host "::error::awt.backends.windows_ci --selftest failed with exit code $code"
+          } else {
+            Write-Host "::notice::backend self-test passed; capabilities written to .sandbox/backends.json"
+          }
+          exit $code
 
       - name: build and run the mod natively
         id: runmod
         continue-on-error: true
         shell: pwsh
         run: |
+          $ErrorActionPreference = "continue"
           $mod = "${{ github.event.inputs.mod }}"
           if (-not $mod) { $mod = "examples/hello-log.wh.cpp" }
           $seconds = "${{ github.event.inputs.seconds }}"
@@ -106,21 +171,72 @@ jobs:
             $arguments += "--screenshot"
           }
           Write-Host "python $($arguments -join ' ')"
-          python @arguments
+          python @arguments *>&1 | Tee-Object -FilePath .sandbox/logs/native-run.log
+          $code = $LASTEXITCODE
+          $produced = Test-Path .sandbox/windows-report.json
+          "runmod: exit=$code report=$produced" |
+            Out-File -FilePath .sandbox/steps.log -Append -Encoding utf8
+          if ($produced) {
+            $level = (Get-Content .sandbox/windows-report.json -Raw |
+                      ConvertFrom-Json).verdict.level
+            Write-Host "::notice::native run finished: exit=$code, verdict.level=$level (the level is the result, not a job status)"
+          } else {
+            Write-Host "::error::the native run produced no report (exit=$code); the last 10 lines of its log follow"
+            Get-Content .sandbox/logs/native-run.log -Tail 10 | ForEach-Object {
+              $line = ($_ -replace "%", "%25")
+              Write-Host "::error::runmod: $line"
+            }
+          }
+          exit $code
 
       - name: step summary (honest, including what was NOT verified)
         if: always()
         shell: pwsh
         run: |
+          $ErrorActionPreference = "continue"
           if (Test-Path .sandbox/windows-report.json) {
             python -m awt.backends.windows_ci --summary .sandbox/windows-report.json |
               Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
-            "## Native Windows run: no report`n`nThe harness did not produce a report; see the job log." |
+            @('## Native Windows run: no report', '',
+              'The harness did not produce a report. The markers below show how far it got.',
+              '', '```') |
               Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            if (Test-Path .sandbox/steps.log) {
+              Get-Content .sandbox/steps.log |
+                Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            }
+            '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
 
-      - name: upload report, capabilities and screenshot
+      - name: fail the job only when the harness broke
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "continue"
+          $reportExists = Test-Path .sandbox/windows-report.json
+          $failed = $false
+          if ("${{ steps.unit.outcome }}" -eq "failure") {
+            Write-Host "::error::the unit tests failed on Windows - that is harness breakage, not a mod result"
+            $failed = $true
+          }
+          if ("${{ steps.capabilities.outcome }}" -eq "failure") {
+            Write-Host "::error::the backend self-test failed - the harness cannot describe this machine"
+            $failed = $true
+          }
+          if (-not $reportExists) {
+            Write-Host "::error::no report was produced at .sandbox/windows-report.json; markers so far:"
+            if (Test-Path .sandbox/steps.log) {
+              Get-Content .sandbox/steps.log | ForEach-Object {
+                Write-Host "::error::marker: $($_ -replace '%', '%25')"
+              }
+            }
+            $failed = $true
+          }
+          if ($failed) { exit 1 }
+          Write-Host "::notice::harness healthy: unit tests passed and a native report was produced"
+
+      - name: upload report, capabilities, screenshot and diagnosis
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -128,7 +244,10 @@ jobs:
           path: |
             .sandbox/windows-report.json
             .sandbox/backends.json
-            .sandbox/logs/screenshot-native-*.png
+            .sandbox/steps.log
+            .sandbox/logs/unit-tests.log
+            .sandbox/logs/selftest.log
             .sandbox/logs/native-run.log
+            .sandbox/logs/screenshot-native-*.png
           if-no-files-found: warn
           retention-days: 30
