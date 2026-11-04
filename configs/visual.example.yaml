@@ -1,0 +1,65 @@
+# Visual comparison thresholds and reference sets - TEMPLATE.
+#
+# Copy it to the git-ignored configs/visual.local.yaml, or put a file next to the
+# mod:  taskbar-clock.wh.cpp.visual.yaml
+#
+# Reference screenshots are images of Microsoft's interfaces and are NEVER
+# committed. The paths below point into .cache/refshots/, which is git-ignored and
+# is where `python3 -m awt.refshots` writes regenerated captures.
+# See docs/visual-diff.md and docs/reference-vms.md.
+
+schema: 1
+
+defaults:
+  tolerance: 0            # per-channel delta that still counts as the same colour
+  ssim_min: 0.90          # below this, the comparison is a mismatch
+  similarity_min: 0.95    # per-pixel similarity floor (1 - mean delta / 255)
+  identical_min: 0.90     # fraction of pixels that must be within tolerance
+  max_differing_ratio: 0.01   # at most 1% of pixels may differ: averages hide a
+                              # two-pixel shift, this ceiling does not
+  max_region_area: null   # ceiling for the largest single divergent region (px)
+  region_threshold: 24    # a pixel joins a divergent region above this delta
+  min_region_area: 16     # smaller components are treated as noise
+  max_regions: 50
+  merge_distance: 0       # merge boxes this close to each other (0 = never)
+  connectivity: 4
+  resize: false           # never rescale silently; set true to allow box resizing
+  mode: RGB               # RGB compares colour, L compares luma only
+  # SSIM is not one number: with numpy it uses an 11x11 Gaussian window, without
+  # numpy an 8x8 uniform block. Set each floor separately if you use both.
+  ssim_min_numpy: 0.90
+  ssim_min_pure: 0.85
+
+mods:
+  taskbar-clock:
+    notes: one reference per build, because the taskbar is a different widget each time
+    thresholds:
+      ssim_min: 0.88
+    references:
+      - id: win11-21h2-1080p
+        path: .cache/refshots/win11-21h2/taskbar-clock.png
+        build_number: 22000
+        edition: Windows 11 21H2
+        theme: default
+        resolution: 1920x1080
+        roi: '0,980,1920,120'        # the taskbar strip only
+        thresholds:
+          tolerance: 6               # ClearType/sub-pixel differences
+          identical_min: 0.80
+          max_differing_ratio: 0.05  # the clock itself must be allowed to differ
+      - id: win7-thinpc-basic
+        path: .cache/refshots/win7-thinpc/taskbar-clock.png
+        build_number: 7601
+        edition: Windows 7 Thin PC
+        theme: basic
+        resolution: 800x600
+        thresholds:
+          ssim_min: 0.75             # the Basic theme is a different widget entirely
+
+  classic-taskbar:
+    references:
+      - id: win8-developer-preview
+        path: .cache/refshots/win8-8102/classic-taskbar.png
+        build_number: 8102           # NOT 8120: see docs/reference-vms.md
+        edition: Windows 8 Developer Preview
+        theme: metro

@@ -1,0 +1,87 @@
+# Self-hosted Windows VM backend - TEMPLATE. Copy it and edit the copy:
+#
+# Windows paths: quote them with SINGLE quotes (disk: 'C:\VMs\win11.qcow2').
+# Inside double quotes YAML reads \t and \n as escapes - correct per the spec,
+# and it silently mangles a path like C:\...\Temp\tmp1234. awt/yamlmini follows
+# the same rule, so this is not a quirk of the bundled reader.
+#
+#     cp configs/vm.example.yaml configs/vm.local.yaml
+#     python3 -m awt.backends --backend self-hosted-vm --mod examples/hello-log.wh.cpp
+#
+# configs/vm.local.yaml, configs/vm.yaml and $AWT_VM_CONFIG are all git-ignored:
+# no VM image path, snapshot name or credential belongs in this repository.
+# See docs/vm-protocol.md and docs/backends.md for the full protocol.
+
+schema: 1
+
+# Free-form label, used in the report and in logs.
+vm_name: win11-21h2
+
+# qemu | virtualbox | hyperv | vmware | other - recorded in run.environment.
+hypervisor: qemu
+
+# Host directory that the guest sees as a drive (QEMU virtio-9p / -virtfs,
+# VirtualBox shared folder, Hyper-V SMB share). This IS the job directory: the
+# backend stages job.json and inbox/ here and reads outbox/ from here, so it must
+# be the directory the guest can actually see. Per-run copies of what the guest
+# sends back are archived under .sandbox/vm/<mod>/.
+shared_folder: /absolute/host/path/to/vm-share
+
+# Where the agent works inside the guest, as the guest sees it.
+guest_workdir: 'S:\awt'
+
+# Placeholders usable in every command below, plus {repo} {shared} {job_dir}
+# {inbox} {outbox} {job_id} {vm_name} {hypervisor}.
+vars:
+  disk: /absolute/host/path/to/windows.qcow2
+  snapshot: clean
+  memory: 8192
+  cpus: 4
+
+# Commands run from the repository root. Two forms are accepted:
+#
+#   * a single string  -> run through a shell (`sh -c` on Linux/macOS, `cmd /c`
+#                         on Windows). Convenient, but quoting is up to you.
+#   * a list [prog, arg, ...] -> run directly, with no shell. Portable and free
+#                         of quoting problems; prefer it, especially on a Windows
+#                         host driving Hyper-V.
+#
+# `start` must return promptly (launch the VM in the background): the backend
+# then waits for the agent's heartbeat, so the command does not have to block
+# until Windows is up.
+commands:
+  revert_snapshot: 'virsh snapshot-revert {vm_name} {snapshot} --running'
+  # One line: the bench's dependency-free YAML subset has no block scalars.
+  start: 'qemu-system-x86_64 -name {vm_name} -machine q35,accel=kvm -cpu host -smp {cpus} -m {memory} -drive file={disk},if=virtio -virtfs local,path={shared},mount_tag=awt,security_model=mapped-xattr -display none -daemonize'
+  stop: 'virsh destroy {vm_name}'
+  # The same three commands in list form (no shell), as a Hyper-V example:
+  #   revert_snapshot: [powershell, -NoProfile, -File, {repo}/vm/restore-snapshot.ps1, {vm_name}, {snapshot}]
+  #   start: [powershell, -NoProfile, -Command, Start-VM -Name {vm_name}]
+  #   stop: [powershell, -NoProfile, -Command, Stop-VM -Name {vm_name} -Force]
+  # Optional: how to ask the hypervisor for a screenshot if the guest cannot
+  # produce one itself. Not required by the backend; leave it out entirely to
+  # skip it (an empty string is rejected as a command).
+
+# What is inside the VM. These values are reported as run.environment unless the
+# guest agent sends its own (the agent's values win - it is there).
+guest:
+  label: Windows 11 21H2
+  os_version: '10.0.22000'
+  build_number: 22000
+  product_type: client        # client | server | domain-controller
+  arch: x86-64
+  # hostname and image are optional; `image` is a local description only, never
+  # a path to a Microsoft image file (those are not redistributed here).
+
+# The in-guest agent script, copied into the shared folder with each job so the
+# guest always runs the version that matches this checkout.
+agent: vm/agent/awt_agent.ps1
+
+# Seconds. Deliberately generous: a cold Windows 11 21H2 VM can need ten minutes
+# to reach a usable desktop, and a run that times out is reported as
+# not_executed rather than as a partial success.
+timeouts:
+  boot: 900
+  job: 600
+  poll: 5
+  command: 300

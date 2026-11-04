@@ -36,6 +36,91 @@ DLLs in `verdict.not_verifiable_here`, and tell the user what to check on real W
 (hook installed? original called? no deadlock on loader lock?). The shim fails those
 calls on purpose and logs `[SHIM] symbol lookup not available in sandbox`.
 
+Then run the symbol matrix — it works without Windows and answers the first question a
+shell mod fails on:
+
+```bash
+python3 -m awt.symbols path/to/mod.wh.cpp                     # table on stdout
+python3 -m awt.symbols path/to/mod.wh.cpp --list              # extraction only, no network
+python3 -m awt.symbols path/to/mod.wh.cpp --json .sandbox/symbol-matrix.json
+python3 -m awt.cli run path/to/mod.wh.cpp --symbols-json .sandbox/symbol-matrix.json
+```
+
+Read the outcomes literally and quote them literally:
+* `found` — that name exists in the public PDB of that exact binary. Say "the symbol
+  exists on build X"; never "the hook works". Confidence tells you how the names were
+  compared (`exact` = byte-identical like the engine does, `structural` = decoded
+  decorated name, `partial` = name only).
+* `missing` — the PDB was read and the name is not in it. This is actionable: the mod is
+  inert on that build; check whether it marks the symbol `optional`.
+* `ambiguous` — several candidates, or a case-only difference (Windhawk would not match).
+* `unknown` — the check did not happen (no network, no signature, module absent from that
+  build, unreadable PDB, module not resolvable from the source). Report it as unknown.
+Exit codes: 0 at least one cell resolved, 3 nothing could be checked, 2 usage error.
+Full documentation, evidence and limits: `docs/symbol-matrix.md`.
+
+## 4b. Never commit downloaded binaries or generated caches
+PEs, PDBs, winbindex payloads and parsed symbol indexes live in `.cache/` (git-ignored).
+Reference clones and the venv live in `.sandbox/` (git-ignored). Machine-specific matrix
+overrides go in `configs/symbol-matrix.local.yaml`. Only `configs/symbol-matrix.yaml`,
+which holds public metadata (version strings, PE timestamps and sizes), is committed.
+
+## 4c. Choosing an execution backend (and not over-claiming from it)
+```bash
+python3 -m awt.backends                                # availability + reasons, per backend
+python3 -m awt.backends --backend windows-runner --mod mod.wh.cpp --screenshot
+python3 -m awt.backends --backend self-hosted-vm --mod mod.wh.cpp   # needs configs/vm.local.yaml
+python3 -m awt.backends.windows_ci --selftest          # what a Windows box can do here
+```
+Read `run.environment` before you quote any result:
+* `shell_profile: client` — a workstation Windows shell. The strongest environment this
+  bench can reach (self-hosted VM with a client edition).
+* `shell_profile: server` — Windows Server, including **every GitHub-hosted Windows
+  runner**. `verdict.indicative` says so in words. Never write "verified on Windows" for
+  a taskbar/Start-menu/notification mod from a CI run; write "compiles, loads and does
+  not crash on Windows Server 2022; the shell itself was not exercised".
+* `shell_profile: wine` — simulated. Not indicative, not verified: it is not Windows.
+* `shell_profile: unknown` — the environment could not be identified. Report that.
+`verdict.indicative` never downgrades `verdict.level`; it qualifies it. Quote both.
+A backend that cannot run produces `level: not_executed` with a reason and exit code 3 —
+do not re-run it in a loop hoping for a different answer, and never present a
+`not_executed` report as a passing one. VM configuration is local and git-ignored
+(`configs/vm.local.yaml`, or `$AWT_VM_CONFIG`); no image path, snapshot name or
+credential is committed. Protocol: `docs/vm-protocol.md`; VMs worth building:
+`docs/reference-vms.md`.
+
+## 4d. Reading a visual comparison (and not over-claiming from it)
+```bash
+python3 -m awt.visualdiff shot.png reference.png                  # 0 match, 1 mismatch, 3 incomparable/unavailable
+python3 -m awt.visualdiff shot.png --mod mod.wh.cpp --diffmap diff.png --json out.json
+python3 -m awt.visualdiff shot.png reference.png --report .sandbox/report.json   # additive attach
+python3 -m awt.visualdiff --show-config --mod-id taskbar-clock    # which thresholds will be applied
+```
+The section is **descriptive, not a verdict**. It is added next to `verdict.level`
+(`visual_comparison`, plus `verdict.visual_comparison_note`) and never changes it, so a
+matching picture does not upgrade `loads_no_crash` and a mismatch does not downgrade a
+verified hook.
+* Read `checks`, not just `status`: every rule is reported with its value, threshold,
+  `direction` (`at_least` floor / `at_most` ceiling) and whether it passed, so you can see
+  *which* rule decided. Similarity floors hide small sharp changes — a window shifted by
+  two pixels keeps 98.7 % of the image similar — which is what `max_differing_ratio` and
+  `max_region_area` are for.
+* Act on `regions`: box, area, worst delta, centroid, and `coordinate_precision` (exact,
+  or approximate after downscaling). Coordinates are relative to the ROI when one was
+  used.
+* `incomparable` means the two images cannot be compared as they are (say, different
+  resolutions). Fix the capture or pass `--resize` / `--roi`; the resize is then recorded
+  as an approximation. `unavailable` means a file could not be read — never present that
+  as a zero difference.
+* Record which implementation ran: `ssim-gaussian-11x11-numpy` and `ssim-block-8x8-pure`
+  are both valid structural similarities and their numbers are **not** interchangeable.
+  Configure `ssim_min_numpy` / `ssim_min_pure` separately if you use both.
+* Thresholds resolve built-in defaults ← file `defaults:` ← mod ← reference
+  (`<mod>.visual.yaml`, `configs/visual.local.yaml`, or `--config`). Reference screenshots
+  are images of Microsoft interfaces: they live in the git-ignored `.cache/refshots/` and
+  are **never committed**. A configured reference that does not exist yet reports
+  `unavailable`. Details: `docs/visual-diff.md`.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.

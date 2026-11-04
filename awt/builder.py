@@ -5,13 +5,34 @@ import re
 import shutil
 import subprocess
 
-from . import metadata
+from . import env, metadata
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CC = "x86_64-w64-mingw32-g++"
-CC_C = "x86_64-w64-mingw32-gcc"
-NM = "x86_64-w64-mingw32-nm"
-FILT = "x86_64-w64-mingw32-c++filt"
+def _tool(env_name, cross, native_candidates):
+    """Compiler/binutil name: explicit override, cross prefix, or native.
+
+    On Linux the bench cross-compiles with `x86_64-w64-mingw32-*`. On Windows the
+    same MinGW toolchain is usually installed without the prefix (MSYS2 mingw64,
+    or the mingw package a CI runner provides), so the native names are tried
+    too. `AWT_CXX` and friends always win: a user with a non-standard toolchain
+    should not have to edit this file.
+    """
+    override = os.environ.get(env_name)
+    if override:
+        return override
+    if os.name != "nt":
+        return cross
+    for candidate in native_candidates:
+        if env.which([candidate]):
+            return candidate
+    return cross
+
+
+CC = _tool("AWT_CXX", "x86_64-w64-mingw32-g++", ["g++", "clang++"])
+CC_C = _tool("AWT_CC", "x86_64-w64-mingw32-gcc", ["gcc", "clang"])
+NM = _tool("AWT_NM", "x86_64-w64-mingw32-nm", ["nm", "llvm-nm"])
+FILT = _tool("AWT_CXXFILT", "x86_64-w64-mingw32-c++filt",
+             ["c++filt", "llvm-cxxfilt"])
 
 BASE_LIBS = ["-lkernel32", "-luser32", "-lgdi32", "-ladvapi32", "-lshell32",
              "-lshlwapi", "-lole32", "-lcomctl32"]
@@ -30,6 +51,22 @@ ERR_RE = re.compile(r"^(?P<file>[^:\s][^:]*):(?P<line>\d+):(?P<col>\d+):\s+(?P<k
 
 def _run(cmd, cwd=None):
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
+def missing_toolchain() -> list:
+    """Cross-compilation tools that are not installed (empty when ready).
+
+    Checked, never assumed: without them no build is possible and the report
+    must say `not_executed` instead of pretending the mod is broken.
+    """
+    missing = []
+    for label, names in (("MinGW C++ compiler", [CC, "x86_64-w64-mingw32-clang++"]),
+                         ("MinGW C compiler", [CC_C, "x86_64-w64-mingw32-gcc"]),
+                         ("MinGW nm", [NM, "x86_64-w64-mingw32-nm"]),
+                         ("MinGW c++filt", [FILT, "x86_64-w64-mingw32-c++filt"])):
+        if not env.which(names):
+            missing.append(label)
+    return missing
 
 
 def _parse_diagnostics(text):
@@ -68,7 +105,17 @@ def build(mod_path, sandbox=None):
 
     result = {"ok": False, "errors": [], "warnings": [], "dll": None,
               "mod_id": mod_id, "meta": meta, "settings": settings,
-              "build_dir": bdir}
+              "build_dir": bdir, "toolchain_missing": []}
+    missing = missing_toolchain()
+    if missing:
+        result["toolchain_missing"] = missing
+        result["errors"].append({
+            "file": mod_path, "line": 0, "col": 0,
+            "message": ("build not attempted: %s not installed in this "
+                        "environment (run ./setup.sh where packages are "
+                        "reachable); nothing was compiled or executed"
+                        % ", ".join(missing))})
+        return result
     settings_path = os.path.join(bdir, "settings.json")
     with open(settings_path, "w", encoding="utf-8") as f:
         f.write(metadata.settings_json(settings))

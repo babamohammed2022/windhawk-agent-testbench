@@ -1,20 +1,260 @@
 name: ci
+
+# Two jobs, two honest questions:
+#
+#   bench           - does the suite pass on Linux, and if stage 2 could not run,
+#                     does the job SAY so instead of pretending?
+#   (windows-ci.yml) - does a mod compile and load in a native Windows process?
+#
+# Diagnosis policy: job logs expire and are not always reachable, and a step
+# summary cannot be read back through the API from a sandbox. Workflow
+# ANNOTATIONS (::notice::, ::warning::, ::error::) can, so every step that can
+# fail publishes its outcome as an annotation, and the log files are uploaded as
+# artifacts with `if: always()`.
+#
+# Exit-code policy for tests/run_tests.sh:
+#   0 = everything ran and passed
+#   1 = a real failure
+#   2 = stage 2 was SKIPPED because Wine/MinGW are unusable here. That is an
+#       honest result, published as a warning, and it does not fail the job.
+
 on: [push, pull_request]
+
 jobs:
   bench:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: start a diagnosis log
+        run: |
+          mkdir -p .sandbox/logs
+          {
+            echo "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+            echo "sha: ${{ github.sha }}"
+            echo "runner: ${{ runner.os }} ${{ runner.image }}"
+            echo "python: $(python3 -V 2>&1)"
+          } > .sandbox/steps.log
+          echo "::notice::bench job started on ${{ runner.image }}"
+
       - name: setup (wine, mingw, xvfb, minhook)
-        run: ./setup.sh
+        id: setup
+        run: |
+          set +e
+          ./setup.sh 2>&1 | tee .sandbox/logs/setup.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "setup: exit=$code" >> .sandbox/steps.log
+          for tool in wine wine64 x86_64-w64-mingw32-g++ Xvfb; do
+            if command -v "$tool" > /dev/null 2>&1; then
+              echo "::notice::toolchain: $tool = $(command -v "$tool")"
+            fi
+          done
+          # Ask the bench, not the PATH: setup.sh also accepts Wine at
+          # /usr/lib/wine/wine64, and env.toolchain_ready() is what stage 2 uses
+          # to decide whether it can run at all.
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, os.getcwd())
+          from awt import builder, env
+          wine = env.find_wine()
+          ready, reason = env.toolchain_ready()
+          missing = builder.missing_toolchain()
+          print("::notice::bench toolchain: wine=%s xvfb=%s ready=%s missing=%s"
+                % (wine, env.which(["Xvfb"]), ready, missing or "none"))
+          if not ready:
+              print("::warning::stage 2 will be SKIPPED because: %s" % reason)
+          PY
+          if [ "$code" != "0" ]; then
+            echo "::error::setup.sh failed with exit code $code (see .sandbox/logs/setup.log in the artifact)"
+          fi
+          exit $code
+
+      # The suite is allowed to fail here so that the diagnosis is always
+      # published; the job still fails at the end when the suite really failed.
       - name: acceptance suite
-        run: bash tests/run_tests.sh
+        id: acceptance
+        continue-on-error: true
+        run: |
+          set +e
+          bash tests/run_tests.sh 2>&1 | tee .sandbox/acceptance.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "acceptance: exit=$code" >> .sandbox/steps.log
+          unit=$(grep -E "^---- unit" .sandbox/acceptance.log | tail -n 1 | tr -d '\r')
+          echo "::notice::tests/run_tests.sh exit=$code | ${unit:-no unit summary found}"
+          if [ "$code" = "2" ]; then
+            reason=$(grep -A 3 "SKIPPED:" .sandbox/acceptance.log | head -n 4 \
+                     | tr '\n' ' ' | tr -s ' ' | cut -c1-400 | sed 's/%/%25/g')
+            echo "::warning::stage 2 SKIPPED (exit 2, an honest result, not a failure): $reason"
+          elif [ "$code" != "0" ]; then
+            # Only real failures: the suite's own `error:` lines are expected
+            # stderr from tests that assert refusals, so they are not annotated.
+            names=$(grep -E "^=== FAIL" .sandbox/acceptance.log | sed 's/^=== FAIL //' | paste -sd, - | cut -c1-380)
+            echo "::error::failing tests: ${names:-none matched, see the artifact log}"
+            awk '/^=== FAIL/{keep=14} keep>0{print; keep--}' .sandbox/acceptance.log \
+              | head -n 40 | while IFS= read -r line; do
+                echo "::error::$(printf '%s' "$line" | cut -c1-380 | sed 's/%/%25/g')"
+              done
+            if grep -qE "^SKIPPED: wine" .sandbox/acceptance.log; then
+              echo "::warning::stage 2 was skipped by the suite itself"
+            fi
+          fi
+          exit $code
+
       - name: conformance table
-        run: python3 -m awt.conformance
-      - name: upload report
+        id: conformance
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 -m awt.conformance 2>&1 | tee .sandbox/logs/conformance.log
+          code=${PIPESTATUS[0]}
+          echo "conformance: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            echo "::error::python3 -m awt.conformance failed with exit code $code"
+          else
+            echo "::notice::conformance table regenerated ($(wc -l < .sandbox/logs/conformance.log) lines)"
+          fi
+          exit $code
+
+      - name: visual comparison self-check
+        id: visual
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 - <<'PY' 2>&1 | tee .sandbox/logs/visual-selfcheck.log
+          """Compare two generated screenshots: the machinery, on the runner."""
+          import os, sys, tempfile
+          sys.path.insert(0, os.getcwd())
+          from tests.unit.fixtures import images
+          from awt.visualdiff.cli import main
+          tmp = tempfile.mkdtemp(prefix="awt-ci-visual-")
+          base = images.desktop()
+          reference = images.write(base, tmp, "reference.png")
+          same = images.write(base, tmp, "same.png")
+          moved = images.write(images.shift(base, (40, 20, 120, 60), 2, 1), tmp, "moved.png")
+          identical = main([same, reference, "--quiet"])
+          shifted = main([moved, reference, "--quiet",
+                          "--diffmap", os.path.join(tmp, "diff.png")])
+          print("identical pair ->", identical, "(expected 0)")
+          print("shifted pair   ->", shifted, "(expected 1)")
+          print("artifacts      ->", sorted(os.listdir(tmp)))
+          problems = []
+          if identical != 0:
+              problems.append("an identical pair did not match (exit %d)" % identical)
+          if shifted != 1:
+              problems.append("a shifted window did not mismatch (exit %d)" % shifted)
+          if not os.path.exists(os.path.join(tmp, "diff.png")):
+              problems.append("no difference map was written")
+          for problem in problems:
+              print("PROBLEM:", problem)
+          raise SystemExit(1 if problems else 0)
+          PY
+          code=${PIPESTATUS[0]}
+          echo "visual: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            echo "::error::the visual comparison self-check failed (exit $code)"
+          else
+            echo "::notice::visual comparison self-check: $(grep -c . .sandbox/logs/visual-selfcheck.log) lines, exit 0"
+          fi
+
+      - name: publish an honest step summary
+        if: always()
+        run: |
+          {
+            echo "## ubuntu acceptance run (Wine backend)"
+            echo
+            echo "| step | exit code | meaning |"
+            echo "| --- | --- | --- |"
+            echo "| setup.sh | \`${{ steps.setup.outputs.code }}\` | toolchain install |"
+            echo "| tests/run_tests.sh | \`${{ steps.acceptance.outputs.code }}\` | 0 = passed, 1 = failed, 2 = stage 2 honestly skipped |"
+            echo "| awt.conformance | \`${{ steps.conformance.outputs.code }}\` | shim conformance table |"
+            echo
+            if [ -f .sandbox/acceptance.log ]; then
+              echo '### failures and skips'
+              echo '```'
+              grep -n -E "FAIL|SKIP|Traceback|error:|Error" .sandbox/acceptance.log | head -n 40 || echo "(none)"
+              echo '```'
+              echo
+              echo '### last 120 lines'
+              echo '```'
+              tail -n 120 .sandbox/acceptance.log
+              echo '```'
+            else
+              echo "no log was produced"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .sandbox/report.json ]; then
+            python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          rep = json.load(open(".sandbox/report.json"))
+          v = rep.get("verdict", {})
+          run = rep.get("run", {})
+          env = run.get("environment") or {}
+          print("### report.json")
+          print()
+          print("| field | value |")
+          print("| --- | --- |")
+          for label, value in (("mod", (rep.get("mod") or {}).get("id")),
+                               ("level", v.get("level")),
+                               ("backend", run.get("backend")),
+                               ("shell profile", env.get("shell_profile")),
+                               ("verified", ", ".join(v.get("verified") or []) or "nothing"),
+                               ("not verifiable here",
+                                ", ".join(v.get("not_verifiable_here") or []) or "nothing"),
+                               ("indicative", "; ".join(v.get("indicative") or []) or "none")):
+              print("| %s | `%s` |" % (label, value))
+          print()
+          print("summary: `%s`" % v.get("summary"))
+          if v.get("not_executed_reason"):
+              print()
+              print("**nothing was executed:** %s" % v["not_executed_reason"])
+          PY
+          fi
+
+      - name: fail the job only when something really failed
+        if: always()
+        env:
+          SETUP: ${{ steps.setup.outputs.code }}
+          SUITE: ${{ steps.acceptance.outputs.code }}
+          CONFORMANCE: ${{ steps.conformance.outputs.code }}
+          VISUAL: ${{ steps.visual.outcome }}
+        run: |
+          failed=0
+          case "$SUITE" in
+            0) echo "::notice::the acceptance suite ran and passed";;
+            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 14 acceptance checks did not run and no claim is made about them";;
+            "") echo "::error::tests/run_tests.sh produced no exit code - the step did not run"; failed=1;;
+            *) echo "::error::tests/run_tests.sh failed with exit code $SUITE"; failed=1;;
+          esac
+          if [ -n "$SETUP" ] && [ "$SETUP" != "0" ]; then
+            echo "::error::setup.sh failed with exit code $SETUP"; failed=1
+          fi
+          if [ -n "$CONFORMANCE" ] && [ "$CONFORMANCE" != "0" ]; then
+            echo "::error::awt.conformance failed with exit code $CONFORMANCE"; failed=1
+          fi
+          if [ "$VISUAL" = "failure" ]; then
+            echo "::error::the visual comparison self-check failed"; failed=1
+          fi
+          if [ "$failed" != "0" ]; then
+            echo "--- .sandbox/steps.log ---"; cat .sandbox/steps.log 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: upload report and diagnosis
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: awt-report
-          path: .sandbox/report.json
+          path: |
+            .sandbox/report.json
+            .sandbox/acceptance.log
+            .sandbox/steps.log
+            .sandbox/logs/setup.log
+            .sandbox/logs/conformance.log
+            .sandbox/logs/visual-selfcheck.log
+          if-no-files-found: warn
+          retention-days: 30
