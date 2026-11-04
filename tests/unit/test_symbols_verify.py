@@ -150,18 +150,29 @@ def _publish(root, module=MODULE, pdb_name=PDB_NAME, timestamp=TIMESTAMP,
     return cv
 
 
+def _yaml_path(path):
+    """A filesystem path safe to interpolate into a double-quoted YAML scalar.
+
+    On Windows a temporary path is `C:\\Users\\...\\Temp\\tmp1234`, and `\\t`
+    inside double quotes is a TAB escape - correct per the YAML specification, and
+    fatal for the path. Forward slashes are taken literally by the reader and are
+    accepted by Windows, so the fixtures use them.
+    """
+    return path.replace("\\", "/")
+
+
 def _matrix_file(tmp, base_url, cache_dir, builds=None, pinned=None):
     builds = builds or [{"id": "win11-24h2", "label": "Windows 11 24H2 (fixture)",
                          "channel": "11-24H2"}]
     lines = ["schema: 1",
              "symbol_server:",
              '  base_url: "%s"' % base_url,
-             '  cache_dir: "%s"' % cache_dir,
+             '  cache_dir: "%s"' % _yaml_path(cache_dir),
              "  timeout_seconds: 10",
              "  attempts: 1",
              "winbindex:",
              "  enabled: false",
-             '  cache_dir: "%s"' % os.path.join(cache_dir, "winbindex"),
+             '  cache_dir: "%s"' % _yaml_path(os.path.join(cache_dir, "winbindex")),
              'arch: "x86-64"',
              "builds:"]
     for build in builds:
@@ -385,7 +396,8 @@ def test_local_module_skips_the_network():
                     '    channel: "11-24H2"\n    required: true\n'
                     'local_modules:\n  %s:\n    pe: "%s"\n    pdb: "%s"\n'
                     'limits:\n  sleep_between_downloads: 0\n'
-                    % (os.path.join(tmp, "cache"), MODULE, pe_path, pdb_path))
+                    % (_yaml_path(os.path.join(tmp, "cache")), MODULE, _yaml_path(pe_path),
+                    _yaml_path(pdb_path)))
         section = verify.verify_mod(_mod_file(tmp), matrix_path=matrix_path,
                                     offline=True)
         rows = _rows(section)

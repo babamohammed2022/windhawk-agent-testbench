@@ -349,10 +349,16 @@ def test_no_references_configured_is_reported_not_guessed():
 
 
 def test_relative_reference_paths_are_resolved_against_the_repository():
-    tmp = _tmp()
+    """The image lives inside the repository's own scratch directory: a relative
+    path from the repo to a temporary directory on another drive does not exist on
+    Windows (`os.path.relpath` raises), and the point here is the resolution rule,
+    not the location of the scratch space."""
+    tmp = os.path.join(host_env.REPO, ".sandbox", "tmp-visual-config")
+    os.makedirs(tmp, exist_ok=True)
     base = images.desktop(width=32, height=24)
     obtained = images.write(base, tmp, "shot.png")
-    relative = os.path.relpath(obtained, host_env.REPO)
+    relative = os.path.relpath(obtained, host_env.REPO).replace(os.sep, "/")
+    require(not os.path.isabs(relative), "the reference must be relative: %r" % relative)
     config = {"schema": 1, "mods": {"clock": {"references": [
         {"id": "repo-relative", "path": relative}]}}}
     section = visualdiff.compare(obtained, mod_id="clock", config=config)
@@ -367,6 +373,7 @@ def test_relative_reference_paths_are_resolved_against_the_repository():
     overrides = {"tolerance": 200, "identical_min": 0.0, "similarity_min": 0.0,
                  "ssim_min": 0.0, "max_differing_ratio": 1.0}
     other = images.write(images.noise(base, 60, seed=9), tmp, "noisy.png")
+    require(os.path.dirname(other) == tmp, "scratch files stay in .sandbox")
     require(visualdiff.compare(other, mod_id="clock", config=absolute,
                                overrides=overrides)["overall"]["status"]
             == visualdiff.STATUS_MATCH,

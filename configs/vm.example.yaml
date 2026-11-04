@@ -1,5 +1,10 @@
 # Self-hosted Windows VM backend - TEMPLATE. Copy it and edit the copy:
 #
+# Windows paths: quote them with SINGLE quotes (disk: 'C:\VMs\win11.qcow2').
+# Inside double quotes YAML reads \t and \n as escapes - correct per the spec,
+# and it silently mangles a path like C:\...\Temp\tmp1234. awt/yamlmini follows
+# the same rule, so this is not a quirk of the bundled reader.
+#
 #     cp configs/vm.example.yaml configs/vm.local.yaml
 #     python3 -m awt.backends --backend self-hosted-vm --mod examples/hello-log.wh.cpp
 #
