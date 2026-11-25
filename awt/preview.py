@@ -43,10 +43,12 @@ def find_wineserver(wine):
     if found:
         return found
     if wine and str(directory) in ("/usr/bin", "/usr/lib/wine"):
-        for name in ("wineserver64", "wineserver"):
-            candidate = Path("/usr/lib/wine") / name
-            if candidate.is_file() and os.access(candidate, os.X_OK):
-                return str(candidate)
+        for private in ("/usr/lib/wine", "/usr/lib64/wine", "/usr/lib/x86_64-linux-gnu/wine",
+                        "/opt/wine-stable/bin", "/opt/wine-devel/bin", "/opt/wine-staging/bin"):
+            for name in ("wineserver64", "wineserver"):
+                candidate = Path(private) / name
+                if candidate.is_file() and os.access(candidate, os.X_OK):
+                    return str(candidate)
     return None
 
 

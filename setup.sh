@@ -29,6 +29,17 @@ else
 fi
 WINE_BIN="$(command -v wine64 || command -v wine || echo /usr/lib/wine/wine64)"
 
+# The visual preview must stop ONLY its own fresh prefix. Some installations
+# provide a wine64 loader but omit the wineserver PATH wrapper (wine package).
+# Install the wrapper when apt is available; custom Wine builds may instead set
+# AWT_WINESERVER to their matching executable.
+if ! command -v wineserver >/dev/null 2>&1 && ! command -v wineserver64 >/dev/null 2>&1 \
+   && [ ! -x /usr/lib/wine/wineserver ] && [ ! -x /usr/lib/wine/wineserver64 ] \
+   && [ -z "${AWT_WINESERVER:-}" ]; then
+    log "wineserver: installing Wine loader/server wrappers ..."
+    apt_install wine || log "WARN: no wineserver wrapper; visual preview needs AWT_WINESERVER"
+fi
+
 # MinGW toolchain (x86-64). llvm-mingw preferred per docs, gcc-mingw accepted.
 if command -v x86_64-w64-mingw32-g++ >/dev/null 2>&1 || command -v x86_64-w64-mingw32-clang++ >/dev/null 2>&1; then
     log "mingw: already present"
