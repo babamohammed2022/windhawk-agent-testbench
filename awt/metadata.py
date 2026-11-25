@@ -60,4 +60,4 @@ def parse_settings(source: str) -> dict:
 
 
 def settings_json(settings: dict) -> str:
-    return json.dumps(settings, indent=1)
+    return json.dumps(settings, indent=1, ensure_ascii=False)

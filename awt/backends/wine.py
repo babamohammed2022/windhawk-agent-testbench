@@ -80,7 +80,8 @@ class WineBackend(Backend):
     def run(self, mod_path, seconds=6, mode="auto", target=None,
             screenshot=False, **kwargs):
         rep = runner.run(mod_path, seconds=seconds, mode=mode, target=target,
-                         screenshot=screenshot, symbols=kwargs.get("symbols"))
+                         screenshot=screenshot, symbols=kwargs.get("symbols"),
+                         settings_override=kwargs.get("settings_override"))
         # no explicit backend: keep whatever the runner decided ("wine" when it
         # ran, "unavailable" when it could not).
         return apply_environment(rep, self.environment())

@@ -22,6 +22,54 @@ cat .sandbox/report.json
 ./tests/run_tests.sh            # the tool's own acceptance suite
 ```
 
+## Visual playground — before / after
+
+```bash
+python3 -m awt.cli preview examples/visual-playground.wh.cpp
+python3 -m awt.cli preview examples/visual-playground.wh.cpp --settings enabled=false
+```
+
+Open the printed `index.html`: a self-contained viewer shows real Win32 client
+captures without/with the mod, the derived difference map, logs and provenance.
+Edit, rerun and open the new report. The demo uses a real `DrawTextW` inline hook
+to paint a visible accent. Each phase uses fresh Wine/display/storage state; no
+fake screenshots are substituted when prerequisites, compilation or execution fail.
+
+**Linux + Wine/MinGW/Xvfb required.** This is a static specimen preview, not a live
+Windows desktop, Explorer or hot reload. Pixels do not prove functional correctness.
+Details, statuses and runtime acceptance: [visual preview](docs/visual-preview.md).
+
+## Offline checks, settings cases and batch execution
+
+```bash
+python3 -m awt.cli check examples/settings-demo.wh.cpp --json .sandbox/check.json
+python3 -m awt.cli run examples/settings-demo.wh.cpp --mode self --settings enabled=false --settings retries=0
+python3 -m awt.cli batch examples/ --json .sandbox/batch.json --junit .sandbox/junit.xml
+```
+
+`check` is heuristic source analysis, not compilation or execution. Settings
+support flat scalar overrides; the current shim cannot decode JSON escapes, so
+unsupported override strings/shapes are rejected rather than silently altered.
+The VM guest protocol does not yet support overrides and explicitly refuses them.
+
+Execution reports add descriptive `static_checks`, `hook_coverage` and `crash`
+sections where evidence is available. Host activity markers record **attempted**
+API calls; hook firing counts still come from the mod's own logs, not independent
+instrumentation. These sections do not change `verdict.level` or prove behaviour.
+
+Batch runs are sequential, retain every report in the batch JSON, and export
+JUnit. Exit codes: **0** execution outcomes positive, **1** failure/unknown/timeout,
+**2** usage/output error or empty discovery, **3** at least one unexecuted mod
+(without failures). Unlike historical `run`, batch treats crash/load failures as
+CI failures and requires confirmed init plus a zero exit code for positive levels.
+Intentional failures in `examples/` are not a green regression suite.
+
+**Roadmap (Italian): [reducing manual Windows testing](docs/testing-roadmap.md).**
+The highest-value next step is behavioural scenarios with assertions and clean vs
+mod comparisons, followed by calibration against real Windhawk on Windows client.
+The expanded C++ activity driver still needs runtime acceptance on a Wine/MinGW
+machine; Python unit tests alone cannot validate it.
+
 ## Symbol matrix — shell mods, checked on Linux (Feature 1)
 The bench cannot hook `twinui.pcshell.dll` under Wine, but it *can* answer the
 question that decides whether such a mod does anything at all: does the internal

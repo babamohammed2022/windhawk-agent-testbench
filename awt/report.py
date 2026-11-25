@@ -24,6 +24,8 @@ def new_report(build_result, analysis) -> dict:
             "ok": build_result["ok"],
             "errors": build_result["errors"],
             "warnings": build_result["warnings"],
+            "effective_settings": build_result.get("settings", {}),
+            "settings_override_unknown": build_result.get("settings_override_unknown", []),
         },
         "analysis": {
             "public_hooks": analysis["public_hooks"],
@@ -34,6 +36,10 @@ def new_report(build_result, analysis) -> dict:
         "run": {"backend": "unavailable"},
         "environment": {},
         "shim": {"not_implemented_called": [], "simulated_with_limits": []},
+        # Descriptive diagnostics (never change the verdict level).
+        "static_checks": {},
+        "hook_coverage": {},
+        "crash": {},
         "verdict": {
             "level": "build_failed",
             "verified": [],
@@ -122,6 +128,22 @@ def summary(rep) -> str:
                         counts.get("ambiguous", 0), counts.get("unknown", 0)))
         lines.append("                 (names only: nothing was executed; see "
                      "symbol_matrix.disclaimer)")
+    sc = rep.get("static_checks") or {}
+    if sc:
+        s = sc.get("summary") or {}
+        lines.append("static checks  : %d check(s) -> %d error(s), %d warning(s)"
+                     % (s.get("checks", 0), s.get("errors", 0), s.get("warnings", 0)))
+    hc = rep.get("hook_coverage") or {}
+    if hc:
+        s = hc.get("summary") or {}
+        lines.append("hook coverage  : %d hook(s) -> fired %d, driven-no-log %d, "
+                     "not-driven %d" % (s.get("hooks", 0), s.get("fired", 0),
+                                        s.get("driven_no_log", 0),
+                                        s.get("not_driven", 0)))
+    cr = rep.get("crash") or {}
+    if cr and cr.get("kind") not in (None, "none"):
+        lines.append("crash          : kind=%s faulting=%s" % (
+            cr.get("kind"), cr.get("faulting_module")))
     for e in rep["build"]["errors"][:8]:
         lines.append("  error %s:%d:%d %s" % (e["file"], e["line"], e["col"], e["message"]))
     return "\n".join(lines)

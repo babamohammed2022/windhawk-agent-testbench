@@ -19,12 +19,18 @@ The host (`host/host.cpp`) and the shim log these markers:
 """
 import re
 
+from . import coverage as coverage_mod
+from . import crash as crash_mod
+
 LOAD_FAILED_RE = re.compile(r"\[awt-host\] load failed err=(\d+)")
 INIT_RE = re.compile(r"\[awt-host\] init returned (-?\d+)")
 AUTOINIT_RE = re.compile(r"autoinit returned (\d+)")
 HOOKS_RE = re.compile(r"\[awt-host\] hooks applied count (\d+)")
 HOOKS_MOD_RE = re.compile(r"hooks applied (\d+)")
 TARGET_EXIT_RE = re.compile(r"\[awt-host\] target exit code (\d+)")
+AFTERINIT_RE = re.compile(r"\[awt-host\] lifecycle Wh_ModAfterInit: called")
+SETTINGS_CHANGED_RE = re.compile(r"\[awt-host\] lifecycle Wh_ModSettingsChanged: called")
+SETTINGS_RELOAD_RE = re.compile(r"\[awt-host\] settings changed \(reload=(\d+)\)")
 CRASH_RES = (re.compile(r"unhandled (exception|page fault)", re.I),
              re.compile(r"wine:.*crash", re.I),
              # a native Windows host prints the exception code without "wine:"
@@ -54,6 +60,7 @@ def parse_host_markers(host_output, mod_log=""):
     # not be reported as a crash. This is the rule the Wine runner always used.
     crashed = any(rx.search(host_output) for rx in CRASH_RES) \
         or (target_exit is not None and target_exit >= 0xC0000000)
+    reload_match = SETTINGS_RELOAD_RE.search(host_output)
     return {
         "load_failed": bool(load_failed_match),
         "load_error": int(load_failed_match.group(1)) if load_failed_match else None,
@@ -62,6 +69,16 @@ def parse_host_markers(host_output, mod_log=""):
         "hooks_applied": hooks_applied,
         "target_exit_code": target_exit,
         "crashed": crashed,
+        # Activity attempts and observed lifecycle callbacks. Additive: older hosts that emit
+        # neither marker simply yield empty/False here.
+        "driven_apis": coverage_mod.parse_driven_apis(host_output),
+        "lifecycle": {
+            "afterinit_called": bool(AFTERINIT_RE.search(host_output)),
+            "settings_changed_called": bool(SETTINGS_CHANGED_RE.search(host_output)),
+            "settings_reload_called": bool(reload_match),
+            "settings_reload_result": (int(reload_match.group(1))
+                                       if reload_match else None),
+        },
     }
 
 
@@ -105,8 +122,14 @@ def verdict_lists(analysis, markers, hooks_fired):
 
 def apply_run_result(rep, analysis, markers, hooks_fired, exit_code=None,
                      timed_out=False, run_log=None, screenshot=None,
-                     stub_log="", target=None, mode=None):
-    """Fill `run`, `shim`, `verdict` and `artifacts` of a report. Additive only."""
+                     stub_log="", target=None, mode=None,
+                     host_output=None):
+    """Fill `run`, `shim`, `verdict` and `artifacts` of a report. Additive only.
+
+    `host_output` feeds the descriptive `hook_coverage` and
+    `crash` sections; when omitted, coverage reports `driven_unknown` instead
+    of guessing what the host drove.
+    """
     rep.setdefault("run", {}).update({
         "target": target,
         "mode": mode,
@@ -118,7 +141,20 @@ def apply_run_result(rep, analysis, markers, hooks_fired, exit_code=None,
         "exit_code": exit_code,
         "timed_out": timed_out,
         "target_exit_code": markers["target_exit_code"],
+        "driven_apis": markers.get("driven_apis"),
+        "lifecycle": markers.get("lifecycle"),
     })
+    # Descriptive sections (never change the verdict level).
+    init_ok = markers.get("init_returned_code") == 1
+    driven = markers.get("driven_apis") if host_output is not None else None
+    if not driven:
+        driven = None  # older hosts and inject mode have no activity telemetry
+    rep["hook_coverage"] = coverage_mod.hook_coverage(
+        analysis, hooks_fired, driven, init_ok=init_ok)
+    rep["crash"] = crash_mod.classify_crash(
+        host_output or "", exit_code=exit_code, timed_out=timed_out,
+        load_failed=markers.get("load_failed", False),
+        target_exit_code=markers.get("target_exit_code"))
     shim = rep.setdefault("shim", {"not_implemented_called": [],
                                    "simulated_with_limits": []})
     shim["not_implemented_called"] = sorted(set((stub_log or "").split()))

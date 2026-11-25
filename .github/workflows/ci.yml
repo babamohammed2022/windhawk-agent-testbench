@@ -57,8 +57,11 @@ jobs:
           python3 - <<'PY'
           import os, sys
           sys.path.insert(0, os.getcwd())
-          from awt import builder, env
+          from awt import builder, env, preview
           wine = env.find_wine()
+          print("::notice::preview Wine tools: loader=%s realpath=%s server=%s"
+                % (wine, os.path.realpath(wine) if wine else None,
+                   preview.find_wineserver(wine)))
           ready, reason = env.toolchain_ready()
           missing = builder.missing_toolchain()
           print("::notice::bench toolchain: wine=%s xvfb=%s ready=%s missing=%s"
@@ -70,6 +73,23 @@ jobs:
             echo "::error::setup.sh failed with exit code $code (see .sandbox/logs/setup.log in the artifact)"
           fi
           exit $code
+
+      - name: isolated visual playground acceptance
+        id: preview
+        # A required gate: do not hide missing prerequisites behind a successful
+        # step conclusion or spend minutes on the main suite after this fails.
+        run: |
+          set +e
+          python3 tests/run_preview_tests.py 2>&1 | tee .sandbox/logs/preview-acceptance.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "preview: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            tail -n 45 .sandbox/logs/preview-acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::preview acceptance: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          else
+            echo "::notice::real Wine playground capture, enabled/disabled accent assertions and cleanup passed"
+          fi
+          exit "$code"
 
       # The suite is allowed to fail here so that the diagnosis is always
       # published; the job still fails at the end when the suite really failed.
@@ -93,6 +113,12 @@ jobs:
             # stderr from tests that assert refusals, so they are not annotated.
             names=$(grep -E "^=== FAIL" .sandbox/acceptance.log | sed 's/^=== FAIL //' | paste -sd, - | cut -c1-380)
             echo "::error::failing tests: ${names:-none matched, see the artifact log}"
+            # Runtime failures are not named like Python unit failures. Publish
+            # the tail as readable annotations too (artifact hosts may be blocked
+            # in the agent sandbox). Preserve the original suite exit code.
+            # One multi-line annotation: GitHub limits errors per step, so a
+            # separate annotation for every backend-table line hides the failure.
+            tail -n 45 .sandbox/acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::acceptance tail: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
             awk '/^=== FAIL/{keep=14} keep>0{print; keep--}' .sandbox/acceptance.log \
               | head -n 40 | while IFS= read -r line; do
                 echo "::error::$(printf '%s' "$line" | cut -c1-380 | sed 's/%/%25/g')"
@@ -222,11 +248,12 @@ jobs:
           SUITE: ${{ steps.acceptance.outputs.code }}
           CONFORMANCE: ${{ steps.conformance.outputs.code }}
           VISUAL: ${{ steps.visual.outcome }}
+          PREVIEW: ${{ steps.preview.outputs.code }}
         run: |
           failed=0
           case "$SUITE" in
             0) echo "::notice::the acceptance suite ran and passed";;
-            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 14 acceptance checks did not run and no claim is made about them";;
+            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 18 acceptance checks did not run and no claim is made about them";;
             "") echo "::error::tests/run_tests.sh produced no exit code - the step did not run"; failed=1;;
             *) echo "::error::tests/run_tests.sh failed with exit code $SUITE"; failed=1;;
           esac
@@ -235,6 +262,9 @@ jobs:
           fi
           if [ -n "$CONFORMANCE" ] && [ "$CONFORMANCE" != "0" ]; then
             echo "::error::awt.conformance failed with exit code $CONFORMANCE"; failed=1
+          fi
+          if [ "$PREVIEW" != "0" ]; then
+            echo "::error::the isolated visual playground acceptance failed or did not execute (exit=$PREVIEW)"; failed=1
           fi
           if [ "$VISUAL" = "failure" ]; then
             echo "::error::the visual comparison self-check failed"; failed=1
@@ -249,6 +279,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: awt-report
+          include-hidden-files: true
           path: |
             .sandbox/report.json
             .sandbox/acceptance.log
@@ -256,5 +287,14 @@ jobs:
             .sandbox/logs/setup.log
             .sandbox/logs/conformance.log
             .sandbox/logs/visual-selfcheck.log
+            .sandbox/logs/preview-acceptance.log
+            .sandbox/preview-acceptance.json
+            .sandbox/previews/*/index.html
+            .sandbox/previews/*/preview.json
+            .sandbox/previews/*/difference.png
+            .sandbox/previews/*/before/capture.png
+            .sandbox/previews/*/after/capture.png
+            .sandbox/previews/*/before/*.log
+            .sandbox/previews/*/after/*.log
           if-no-files-found: warn
           retention-days: 30

@@ -130,3 +130,29 @@
     blinking caret or an animation makes a correct mod differ; no DPI virtualisation, so a
     150 %-scaled capture is simply a different image. The PNG reader refuses interlaced
     images outright (Adam7 is not implemented) instead of guessing.
+
+## Diagnostics and batch additions (2026-11-25)
+
+26. **Activity coverage is not functional coverage.** Host `activity` markers are
+    emitted immediately before attempted calls, not after successful operations.
+    `fired` still means matching text in the mod-owned log, not an independently
+    instrumented hook invocation. `driven_no_log` can be a working hook that does
+    not log. Hosts without telemetry report unknown stimulus coverage. Static
+    `wine_expectation` values are not tested compatibility results. New C++ host
+    paths require Wine/native runtime acceptance; pure Python tests cannot prove
+    they compile or execute correctly.
+27. **Static checks and crash triage are descriptive heuristics.** The linter does
+    not expand C++ macros or fully parse raw strings, conditional compilation,
+    nested settings or dynamic keys. Triage cannot attribute a failure to Wine,
+    shim or mod from a frame name. Timeout means elapsed deadline, not proven
+    deadlock. These sections never change the legacy verdict level; in particular
+    that level alone still does not reliably express timeouts. Batch CI separately
+    fails explicit timeouts/crashes in runtime data.
+28. **Overrides and lifecycle are not a complete reload test.** Overrides support
+    flat integer/boolean/string values; the minimal shim does not decode JSON
+    escapes, so overrides requiring those are refused. The VM backend explicitly
+    refuses overrides until the guest protocol supports them. A settings callback
+    is a same-value notification; a requested reload is recorded but not carried
+    out. The pre-existing host/shim double-uninit path is not fixed by these
+    additions. Batch runs share prefix/storage and are not isolated snapshots.
+    See `docs/testing-roadmap.md` for the work needed before skipping Windows tests.

@@ -48,12 +48,12 @@ run() { ./run.sh "$1" ${2:+--seconds $2} >/dev/null 2>&1; }
 if [ "$TOOLCHAIN" != "ready" ]; then
     cat <<'EOF'
 SKIPPED: wine/mingw/xvfb are not installed in this environment, so no mod was
-         compiled and no mod was executed. 14 acceptance checks are not run and
+         compiled and no mod was executed. 18 acceptance checks are not run and
          no claim is made about them. Install the toolchain (./setup.sh) on a
          machine with package access and re-run, or use the CI workflow
          .github/workflows/ci.yml which runs this stage on ubuntu-latest.
 EOF
-    SKIP=14
+    SKIP=18
     echo "---- unit passed; acceptance: $SKIP skipped (toolchain missing)"
     exit 2
 fi
@@ -81,9 +81,20 @@ run tests/shim_conformance/t3_storage.wh.cpp 3
 check "conf storage roundtrip" "any('bin=1,2,250' in l and 'del=1' in l for l in r['run']['log']) and any('CONF3 s=stored' in l for l in r['run']['log'])"
 run tests/shim_conformance/t4_log_formats.wh.cpp 3
 check "conf log formats" "any('int=42 hex=ff str=wide narrow=narrow' in l for l in r['run']['log'])"
+./run.sh tests/shim_conformance/t5_activity.wh.cpp --mode self --seconds 2 >/dev/null 2>&1
+check "activity fixture public hooks log firings" "r['run']['hooks_fired'].get('ReadFile',0)>0 and r['run']['hooks_fired'].get('GetWindowRect',0)>0"
+check "activity coverage has attempted calls" "all(api in r['run']['driven_apis'] for api in ('ReadFile','GetWindowRect','RegQueryValueExW')) and r['hook_coverage']['summary']['fired']==2"
+check "activity lifecycle callbacks observed" "r['run']['lifecycle']['afterinit_called'] and r['run']['lifecycle']['settings_changed_called']"
+./run.sh examples/settings-demo.wh.cpp --mode self --seconds 2 --settings enabled=false --settings retries=7 --settings greeting=override >/dev/null 2>&1
+check "settings overrides reach the shim" "'enabled=0 retries=7' in ' '.join(r['run']['log']) and 'greeting=override' in ' '.join(r['run']['log']) and r['build']['effective_settings']['retries']==7"
 python3 -m awt.conformance >/dev/null 2>&1
 check "conformance table zero missing" "True"
 ./setup.sh >/dev/null 2>&1
 check "setup.sh idempotent" "True"
 echo "---- $PASS passed, $FAIL failed"
-[ "$FAIL" = 0 ]
+[ "$FAIL" = 0 ] || exit 1
+
+echo "=== stage 3: real Wine visual preview acceptance ==="
+# Toolchain was available in stage 2: a missing preview prerequisite is an
+# incomplete acceptance run, not a green check. Standalone script uses exit 3.
+"$PYTHON" tests/run_preview_tests.py || exit 1
