@@ -73,7 +73,8 @@ jobs:
 
       - name: isolated visual playground acceptance
         id: preview
-        continue-on-error: true
+        # A required gate: do not hide missing prerequisites behind a successful
+        # step conclusion or spend minutes on the main suite after this fails.
         run: |
           set +e
           python3 tests/run_preview_tests.py 2>&1 | tee .sandbox/logs/preview-acceptance.log
