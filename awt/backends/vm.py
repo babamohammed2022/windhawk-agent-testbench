@@ -465,6 +465,10 @@ class VmBackend(Backend):
     def run(self, mod_path, seconds=6, mode="auto", target=None, screenshot=False,
             symbols=None, keep_running=False, revert=True, **kwargs):
         hist = _history_dir()
+        if kwargs.get("settings_override") is not None:
+            return report_mod.finish(self.not_executed_report(
+                mod_path, "settings overrides are not supported by the VM guest protocol"),
+                hist)
         try:
             config = self.config()
         except VmConfigError as exc:
@@ -486,7 +490,8 @@ class VmBackend(Backend):
         except VmConfigError as exc:
             return report_mod.finish(self.not_executed_report(mod_path, str(exc)), hist)
         archive_dir = self.archive_dir(slug)
-        ana = analyzer.analyze(mod_path)
+        with open(mod_path, encoding="utf-8", errors="replace") as f:
+            ana = analyzer.analyze(f.read())
         job = self.prepare_job(mod_path, seconds, mode, target, screenshot, workdir,
                                symbols=symbols, extra=kwargs.get("extra"))
         notes = list(job.get("notes") or [])
@@ -652,7 +657,8 @@ class VmBackend(Backend):
             timed_out=bool(run_result.get("timed_out")),
             run_log=host_log, screenshot=screenshot_path,
             stub_log=run_result.get("stub_log", ""),
-            mode=job.get("mode"), target=run_result.get("target") or job.get("target"))
+            mode=job.get("mode"), target=run_result.get("target") or job.get("target"),
+            host_output=run_result.get("host_output"))
         rep["run"]["log"] = [line.rstrip("\r\n") for line in
                              (run_result.get("mod_log") or "").splitlines()][:200]
         rep["run"]["backend"] = self.name

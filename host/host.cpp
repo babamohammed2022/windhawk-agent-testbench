@@ -27,7 +27,7 @@ static void Mark(const char* fmt, ...) {
 
 typedef BOOL (*ModInitFn)();
 typedef void (*ModVoidFn)();
-typedef BOOL (*ModReloadFn)(BOOL*);
+typedef void (*ModReloadFn)(bool*);
 typedef BOOL (*AwtBoolFn)();
 typedef UINT (*AwtUintFn)();
 
@@ -56,34 +56,106 @@ static int RunSelfMode(const wchar_t* modPath, int seconds) {
     auto count = (AwtUintFn)GetProcAddress(g_mod, "AwtAppliedHookCount");
     if (count) Mark("hooks applied count %u", count());
 
+    CallLifecycle(g_mod, "Wh_ModAfterInit", "after init");
+
+    // Markers describe attempted calls, not successful operations.
     // Generic Win32 activity so public-API hooks fire inside this process.
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);
     wcsncat(tmp, L"awt-self.txt", MAX_PATH - wcslen(tmp) - 1);
     for (int i = 0; i < 6; ++i) {
-        HANDLE hf = CreateFileW(tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        Mark("activity CreateFileW");
+        HANDLE hf = CreateFileW(tmp, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (hf != INVALID_HANDLE_VALUE) {
             DWORD w; const char* data = "awt self activity\n";
+            Mark("activity WriteFile");
             WriteFile(hf, data, (DWORD)strlen(data), &w, NULL);
+            SetFilePointer(hf, 0, NULL, FILE_BEGIN);
+            char buffer[64] = {};
+            Mark("activity ReadFile");
+            ReadFile(hf, buffer, sizeof(buffer), &w, NULL);
+            Mark("activity CloseHandle");
             CloseHandle(hf);
         }
         Sleep(120);
     }
     DeleteFileW(tmp);
 
+    Mark("activity LoadLibraryW");
+    HMODULE kernel = LoadLibraryW(L"kernel32.dll");
+    if (kernel) {
+        Mark("activity GetProcAddress");
+        GetProcAddress(kernel, "GetTickCount");
+        FreeLibrary(kernel);
+    }
+    HKEY key = NULL;
+    Mark("activity RegOpenKeyExW");
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software", 0, KEY_READ, &key) == ERROR_SUCCESS) {
+        DWORD size = 0;
+        Mark("activity RegQueryValueExW");
+        RegQueryValueExW(key, L"awt-nonexistent", NULL, NULL, NULL, &size);
+        RegCloseKey(key);
+    }
+    Mark("activity GetSystemMetrics");
+    GetSystemMetrics(SM_CXSCREEN);
+    BOOL beep = FALSE;
+    Mark("activity SystemParametersInfoW");
+    SystemParametersInfoW(SPI_GETBEEP, 0, &beep, 0);
+
+    WNDCLASSEXW wc = {};
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = DefWindowProcW;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.lpszClassName = L"AwtActivityWindow";
+    Mark("activity RegisterClassExW");
+    ATOM atom = RegisterClassExW(&wc);
+
     // tray client activity (NIM_ADD / NIM_MODIFY / NIM_DELETE)
     NOTIFYICONDATAW nid = {};
     nid.cbSize = sizeof(nid);
-    nid.hWnd = CreateWindowExW(0, L"STATIC", L"awt-tray", 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL);
+    Mark("activity CreateWindowExW");
+    nid.hWnd = CreateWindowExW(0, atom ? wc.lpszClassName : L"STATIC", L"awt-activity",
+                              WS_OVERLAPPEDWINDOW, 40, 40, 420, 240,
+                              NULL, NULL, wc.hInstance, NULL);
+    if (nid.hWnd) {
+        Mark("activity ShowWindow");
+        ShowWindow(nid.hWnd, SW_SHOWNOACTIVATE);
+        Mark("activity SetWindowPos");
+        SetWindowPos(nid.hWnd, NULL, 60, 60, 420, 240, SWP_NOZORDER | SWP_NOACTIVATE);
+        RECT rect = {};
+        Mark("activity GetWindowRect");
+        GetWindowRect(nid.hWnd, &rect);
+        Mark("activity SendMessageW");
+        SendMessageW(nid.hWnd, WM_NULL, 0, 0);
+        Mark("activity PostMessageW");
+        PostMessageW(nid.hWnd, WM_NULL, 0, 0);
+        Mark("activity CreateFontW");
+        HFONT font = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        HDC dc = GetDC(nid.hWnd);
+        if (dc) {
+            HGDIOBJ old = font ? SelectObject(dc, font) : NULL;
+            RECT textRect = {10, 10, 300, 60};
+            Mark("activity DrawTextW");
+            DrawTextW(dc, L"Windhawk test activity", -1, &textRect, DT_LEFT | DT_SINGLELINE);
+            if (old) SelectObject(dc, old);
+            ReleaseDC(nid.hWnd, dc);
+        }
+        if (font) DeleteObject(font);
+    }
     nid.uID = 1;
     nid.uFlags = NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_USER + 1;
     wcsncpy(nid.szTip, L"awt tray", 63);
+    Mark("activity Shell_NotifyIconW");
     Shell_NotifyIconW(NIM_ADD, &nid);
     Sleep(200);
     wcsncpy(nid.szTip, L"awt tray modified", 63);
+    Mark("activity Shell_NotifyIconW");
     Shell_NotifyIconW(NIM_MODIFY, &nid);
     Sleep(200);
+    Mark("activity Shell_NotifyIconW");
     Shell_NotifyIconW(NIM_DELETE, &nid);
 
     // pump messages for the requested time so window hooks/subclasses live
@@ -98,8 +170,12 @@ static int RunSelfMode(const wchar_t* modPath, int seconds) {
         }
     }
 
+    if (nid.hWnd) DestroyWindow(nid.hWnd);
+    if (atom) UnregisterClassW(wc.lpszClassName, wc.hInstance);
+
     auto reload = (ModReloadFn)GetProcAddress(g_mod, "Wh_ModSettingsChangedReload");
-    if (reload) { BOOL r = FALSE; reload(&r); Mark("settings changed (reload=%d)", (int)r); }
+    if (reload) { bool r = false; reload(&r); Mark("settings changed (reload=%d)", (int)r); }
+    else CallLifecycle(g_mod, "Wh_ModSettingsChanged", "same settings; notification only");
     CallLifecycle(g_mod, "Wh_ModBeforeUninit", "before uninit");
     CallLifecycle(g_mod, "Wh_ModUninit", "uninit");
     FreeLibrary(g_mod);

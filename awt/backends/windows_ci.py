@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 
-from .. import analyzer, builder, report as report_mod, verdict
+from .. import analyzer, builder, report as report_mod, verdict, staticchecks
 from .. import env as host_env
 from .base import (Backend, apply_environment, environment_block, exit_code_for,
                    indicative_notes, shell_profile)
@@ -407,9 +407,13 @@ class WindowsRunnerBackend(Backend):
             return report_mod.finish(rep, hist)
 
         started = time.time()
-        b = builder.build(mod_path)
-        ana = analyzer.analyze(mod_path)
+        b = builder.build(mod_path,
+                          settings_override=kwargs.get("settings_override"))
+        with open(mod_path, encoding="utf-8", errors="replace") as f:
+            source = f.read()
+        ana = analyzer.analyze(source)
         rep = report_mod.new_report(b, ana)
+        rep["static_checks"] = staticchecks.run_checks(source, mod_path)
         rep["environment"] = host_env.probe()
         apply_environment(rep, env, backend=self.name)
         if not b["ok"]:
@@ -505,7 +509,8 @@ class WindowsRunnerBackend(Backend):
         verdict.apply_run_result(
             rep, ana, markers, hooks_fired, exit_code=exit_code,
             timed_out=timed_out, run_log=run_log, screenshot=shot_path,
-            stub_log=stublog, mode=mode, target=target)
+            stub_log=stublog, mode=mode, target=target,
+            host_output=out)
         rep["run"]["log"] = [line.rstrip("\r\n")
                              for line in modlog.splitlines()][:200]
         rep["run"]["seconds"] = round(time.time() - started, 2)

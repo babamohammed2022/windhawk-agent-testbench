@@ -9,6 +9,7 @@ import time
 
 from . import analyzer, builder, report
 from . import env as host_env
+from . import staticchecks
 from . import verdict
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -78,14 +79,24 @@ def missing_runtime():
 
 
 def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
-        symbols=None):
+        symbols=None, settings_override=None):
     started = time.time()
-    b = builder.build(mod_path)
+    b = builder.build(mod_path, settings_override=settings_override)
     source = open(mod_path, encoding="utf-8", errors="replace").read()
     ana = analyzer.analyze(source)
     meta = b["meta"]
 
     rep = report.new_report(b, ana)
+    # Static checks need no execution, so they are attached on every path
+    # (build failure and not_executed included).
+    rep["static_checks"] = staticchecks.run_checks(source, mod_path)
+    if b.get("settings_override_unknown"):
+        rep["static_checks"]["checks"].append({
+            "id": "settings.override_unknown", "severity": "warning",
+            "message": "settings override names not declared in the mod: %s"
+                       % ", ".join(b["settings_override_unknown"])})
+        rep["static_checks"]["summary"]["warnings"] += 1
+        rep["static_checks"]["summary"]["checks"] += 1
     rep["environment"] = host_env.probe()
     if symbols:
         # Feature 1 result, attached additively: it never changes the verdict
@@ -296,7 +307,8 @@ def run(mod_path, seconds=6, mode="auto", target=None, screenshot=False,
         rep, ana, markers, hooks_fired, exit_code=exit_code, timed_out=timed_out,
         run_log=run_log, screenshot=(shot if shot and os.path.exists(shot) else None),
         stub_log=stublog, mode=mode,
-        target="awt-host.exe (self)" if mode == "self" else target)
+        target="awt-host.exe (self)" if mode == "self" else target,
+        host_output=out)
     rep["run"]["backend"] = "wine"
     rep["run"]["log"] = [l.rstrip("\r\n") for l in modlog.splitlines()][:200]
     return report.finish(rep, hist)

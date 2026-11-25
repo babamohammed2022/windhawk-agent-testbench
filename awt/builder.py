@@ -93,18 +93,56 @@ def _mangled_lifecycle(obj):
     return out
 
 
-def build(mod_path, sandbox=None):
+def validate_settings_override(override):
+    """Flat scalar overrides supported by the current minimal shim parser.
+
+    JSON escapes are not decoded by that parser; reject them rather than
+    silently testing different strings. UTF-8 without escapes is supported.
+    """
+    if override is None:
+        return None
+    if not isinstance(override, dict):
+        raise ValueError("settings overrides must be a JSON object")
+    out = {}
+    for key, value in override.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("setting keys must be non-empty strings")
+        if not isinstance(value, (str, int)):
+            raise ValueError("setting %r must be an integer, boolean or string" % key)
+        for text in (key, value if isinstance(value, str) else ""):
+            if any(ord(c) < 32 or c in '\\"' for c in text):
+                raise ValueError("setting %r needs JSON escapes unsupported by the shim" % key)
+        if isinstance(value, int):
+            if not -(2**31) <= value < 2**31:
+                raise ValueError("setting %r is outside the signed 32-bit range" % key)
+            value = int(value)  # booleans must serialize as 1/0
+        out[key] = value
+    return out
+
+
+def merge_settings(settings, override):
+    """Merge overrides over defaults and report undeclared keys (possible typos)."""
+    override = validate_settings_override(override)
+    merged = dict(settings or {})
+    unknown = sorted(key for key in (override or {}) if key not in merged)
+    merged.update(override or {})
+    return merged, unknown
+
+
+def build(mod_path, sandbox=None, settings_override=None):
     mod_path = os.path.abspath(mod_path)
     sandbox = sandbox or os.path.join(REPO, ".sandbox")
     source = open(mod_path, encoding="utf-8", errors="replace").read()
     meta = metadata.parse_metadata(source)
-    settings = metadata.parse_settings(source)
+    settings, unknown_settings = merge_settings(
+        metadata.parse_settings(source), settings_override)
     mod_id = meta["raw"].get("id", os.path.splitext(os.path.basename(mod_path))[0])
     bdir = os.path.join(sandbox, "build", mod_id)
     os.makedirs(bdir, exist_ok=True)
 
     result = {"ok": False, "errors": [], "warnings": [], "dll": None,
               "mod_id": mod_id, "meta": meta, "settings": settings,
+              "settings_override_unknown": unknown_settings,
               "build_dir": bdir, "toolchain_missing": []}
     missing = missing_toolchain()
     if missing:
@@ -211,11 +249,27 @@ def build_host():
     """Compile the loader/host exe once per sandbox."""
     host = os.path.join(SANDBOX if False else os.path.join(REPO, ".sandbox"), "build", "awt-host.exe")
     os.makedirs(os.path.dirname(host), exist_ok=True)
-    if os.path.exists(host):
-        return host
     src = os.path.join(REPO, "host", "host.cpp")
+    if os.path.exists(host) and os.path.getmtime(host) > max(
+            os.path.getmtime(src), os.path.getmtime(__file__)):
+        return host
     p = _run([CC, "-std=c++20", "-O1", "-DUNICODE", "-D_UNICODE", "-municode", "-o", host, src,
-              "-lkernel32", "-luser32", "-ladvapi32", "-static-libgcc", "-static-libstdc++"])
+              "-lkernel32", "-luser32", "-ladvapi32", "-lgdi32", "-lshell32",
+              "-static-libgcc", "-static-libstdc++"])
     if p.returncode != 0:
         raise RuntimeError("host build failed: " + p.stderr[:2000])
     return host
+
+
+def build_playground(sandbox=None):
+    """Compile the visual specimen in a caller-owned build directory."""
+    sandbox = sandbox or os.path.join(REPO, ".sandbox")
+    output = os.path.join(sandbox, "build", "awt-playground.exe")
+    os.makedirs(os.path.dirname(output), exist_ok=True)
+    src = os.path.join(REPO, "host", "playground.cpp")
+    p = _run([CC, "-std=c++20", "-O1", "-DUNICODE", "-D_UNICODE", "-municode",
+              "-o", output, src, "-lkernel32", "-luser32", "-lgdi32", "-lcomctl32",
+              "-static-libgcc", "-static-libstdc++"])
+    if p.returncode != 0 or not os.path.isfile(output):
+        raise RuntimeError("playground build failed: " + p.stderr[:4000])
+    return output

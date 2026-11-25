@@ -226,7 +226,7 @@ jobs:
           failed=0
           case "$SUITE" in
             0) echo "::notice::the acceptance suite ran and passed";;
-            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 14 acceptance checks did not run and no claim is made about them";;
+            2) echo "::warning::the acceptance suite passed stage 1 and honestly SKIPPED stage 2 (no Wine/MinGW here): 18 acceptance checks did not run and no claim is made about them";;
             "") echo "::error::tests/run_tests.sh produced no exit code - the step did not run"; failed=1;;
             *) echo "::error::tests/run_tests.sh failed with exit code $SUITE"; failed=1;;
           esac
@@ -249,6 +249,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: awt-report
+          include-hidden-files: true
           path: |
             .sandbox/report.json
             .sandbox/acceptance.log
@@ -256,5 +257,13 @@ jobs:
             .sandbox/logs/setup.log
             .sandbox/logs/conformance.log
             .sandbox/logs/visual-selfcheck.log
+            .sandbox/preview-acceptance.json
+            .sandbox/previews/*/index.html
+            .sandbox/previews/*/preview.json
+            .sandbox/previews/*/difference.png
+            .sandbox/previews/*/before/capture.png
+            .sandbox/previews/*/after/capture.png
+            .sandbox/previews/*/before/*.log
+            .sandbox/previews/*/after/*.log
           if-no-files-found: warn
           retention-days: 30
