@@ -64,6 +64,25 @@ JUnit. Exit codes: **0** execution outcomes positive, **1** failure/unknown/time
 CI failures and requires confirmed init plus a zero exit code for positive levels.
 Intentional failures in `examples/` are not a green regression suite.
 
+## PR readiness — replay Windhawk's PR validators (offline)
+
+Before submitting a mod to `ramensoftware/windhawk-mods`, replay the checks that
+the upstream repository actually runs, using **upstream's own validator** (a
+dated, hash-pinned snapshot), not an imitation:
+
+```bash
+python3 -m pip install pyyaml                       # the upstream script needs it
+python3 -m awt.prgate mod.wh.cpp --author LOGIN --pr-body pr-body.md \
+    --author-id 123456 --json .sandbox/prgate-report.json
+```
+
+It reproduces the one-file PR diff that upstream's `PR mod validation` job sees
+and reports blocking errors, review items and the gates that cannot be run here
+(official Windhawk compile matrix, X account verification, PR flow/AI review and
+human approval). `ready_for_ci` means *no local blockers*, **not** "accepted" and
+not "will be merged"; the verdict always carries `not_verifiable_here`.
+Snapshot provenance, limits and refresh procedure: [`docs/pr-readiness.md`](docs/pr-readiness.md).
+
 **Roadmap (Italian): [reducing manual Windows testing](docs/testing-roadmap.md).**
 The highest-value next step is behavioural scenarios with assertions and clean vs
 mod comparisons, followed by calibration against real Windhawk on Windows client.
@@ -178,6 +197,9 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 - `docs/` — `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
   `backends.md`, `vm-protocol.md`, `reference-vms.md`, `visual-diff.md`, official
   headers cache.
+- `awt/prgate.py`, `awt/prgate_runner.py` — offline replay of Windhawk's PR validators;
+  `third_party/windhawk-pr-validation/` holds the hash-pinned upstream scripts and data snapshot.
+- `tools/refresh_prgate_snapshot.py` — refreshes that public, metadata-only snapshot.
 - `tests/unit/` — Wine-free unit tests (`python3 tests/unit/run_unit.py`), including an
   end-to-end symbol-matrix run against a local fake symbol server, an end-to-end VM
   protocol run against a fake hypervisor and fake guest agent

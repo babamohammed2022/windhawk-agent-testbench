@@ -136,6 +136,26 @@ captures. There is no live desktop or hot reload. Do not expose the repo, prefix
 or arbitrary execution endpoints via a preview server. Runtime acceptance:
 `python3 tests/run_preview_tests.py`; details: `docs/visual-preview.md`.
 
+## 4f. Windhawk PR validators (offline replay)
+Use this when asked whether a PR could be accepted; never answer from the Wine verdict alone.
+```bash
+python3 -m awt.prgate mod.wh.cpp --author LOGIN --pr-body pr-body.md \
+    --author-id 123456 --json .sandbox/prgate-report.json
+```
+It runs upstream's *own* `pr_validation.py` (hash-pinned snapshot) against a synthetic
+one-file PR diff, plus a dated catalog snapshot. Read `verdict.submission_readiness`,
+`verdict.blocking_errors`, `verdict.review_items`, every gate's `status` and
+`verdict.not_verifiable_here` literally:
+* `blocked` — upstream errors; fix them before submitting.
+* `needs_manual_review` — no errors, but review items or an unverified X account.
+* `ready_for_ci` — no local blockers. Say "no local blockers"; **never** "accepted",
+  "approved" or "will be merged".
+* `unknown` — the validator did not complete. Report nothing as checked.
+The official compile matrix (Windhawk 1.6.1, 1.7.3, 2.0.0-alpha.8), PR flow/AI review
+and human approval are always `unavailable`/`not_verifiable_here`. Quote that list, not a
+guess. `docs/pr-readiness.md` has the snapshot provenance and refresh procedure; keep the
+snapshot hashes verified with `python3 tests/unit/run_unit.py prgate`.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.

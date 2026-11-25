@@ -1,0 +1,62 @@
+{
+ "files": {
+  "catalog.json": {
+   "exact": false,
+   "note": "Metadata-only projection of deployed mod sources; raw sources are not vendored.",
+   "sha256": "6c5992bb7b34a1400feccdfdb81c7ed5d00ec4fa69196a7ff26d5427eeb3da7b",
+   "source": "https://github.com/ramensoftware/windhawk-mods/tree/pages/mods"
+  },
+  "extract_mod_symbols.py": {
+   "exact": true,
+   "sha256": "e0afdfa65a9a7c0618705b59d1327d86e1ad45713e871eea83bdbde1a3be528a"
+  },
+  "mod_author_data.json": {
+   "exact": true,
+   "sha256": "47b34a9e61dbec20f86c6afe29f3bca045b02d0ba913ff741351dfe75e5c0b44",
+   "url": "https://raw.githubusercontent.com/ramensoftware/windhawk-mods/pages/mod_author_data.json"
+  },
+  "pr_validation.py": {
+   "exact": true,
+   "sha256": "ef17846585b72f41afb176c2429f96c774368b5951ee1c0f4ae1b14db4f12032"
+  },
+  "preprocessor.py": {
+   "exact": true,
+   "sha256": "6a1f69e655dae7729b2d8148d1da100e8604592f9b4c6ce0d84cbdd20f1f4db4"
+  },
+  "pull_request_template.md": {
+   "exact": true,
+   "sha256": "a790a7efeb1c19ed6985cace065c95dda405dc9e1303934413e33746684c45a3"
+  },
+  "spdx_license_ids.json": {
+   "exact": true,
+   "sha256": "eea515795da85352c214756651025dabe27a413aff6562fc25a3b41a9d93e5aa",
+   "url": "https://github.com/spdx/license-list-data/blob/main/json/licenses.json"
+  },
+  "windows_filenames.json": {
+   "exact": false,
+   "note": "Subset used only for symbol-hook review items; a miss is reported as unavailable.",
+   "sha256": "0b9338d92a398089a72060e9aaddc2bb316e49bbd3bf0efb87820f26a5e013cd",
+   "source": "include directives of the deployed mods, not winbindex.m417z.com"
+  }
+ },
+ "generated_at": "2026-11-25T23:14:24+00:00",
+ "upstream": {
+  "commit": "f11433e958a8f8a44449a19aefc096eedec76c22",
+  "compatibility_workflow": ".github/workflows/mod_compatibility_check.yml",
+  "other_pr_workflows": [
+   ".github/workflows/pr_labels.yml",
+   ".github/workflows/pr_commands.yml",
+   ".github/workflows/pr_queued_ai_review.yml"
+  ],
+  "pr_checks": [
+   "Test changed files",
+   "Manual review",
+   "run (1.6.1)",
+   "run (1.7.3)",
+   "run (2.0.0-alpha.8)",
+   "run"
+  ],
+  "repository": "https://github.com/ramensoftware/windhawk-mods",
+  "workflow": ".github/workflows/pr_validation.yml"
+ }
+}
