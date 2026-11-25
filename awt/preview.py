@@ -28,6 +28,28 @@ DISCLAIMER = ("Wine + Windhawk shim, not real Windows/Windhawk. This is a Win32 
               "not functional assertions. Equal images may mean the mod had no visible effect.")
 
 
+def find_wineserver(wine):
+    """Debian wine64 may ship only /usr/lib/wine/wineserver64, not a PATH wrapper."""
+    override = os.environ.get("AWT_WINESERVER")
+    if override:
+        return shutil.which(override)
+    if wine:
+        directory = Path(shutil.which(wine) or wine).resolve().parent
+        for name in ("wineserver", "wineserver64"):
+            candidate = directory / name
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+    found = shutil.which("wineserver") or shutil.which("wineserver64")
+    if found:
+        return found
+    if wine and str(directory) in ("/usr/bin", "/usr/lib/wine"):
+        for name in ("wineserver64", "wineserver"):
+            candidate = Path("/usr/lib/wine") / name
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+    return None
+
+
 def windows_path(path):
     return "Z:" + str(Path(path).resolve()).replace("/", "\\")
 
@@ -265,11 +287,7 @@ def generate(mod_path, settings_override=None, settle_ms=800):
     try:
         absent = builder.missing_toolchain()
         wine = host_env.find_wine()
-        wineserver = os.environ.get("AWT_WINESERVER") or shutil.which("wineserver")
-        if not wineserver and wine:
-            candidate = Path(wine).resolve().parent / "wineserver"
-            if candidate.is_file():
-                wineserver = str(candidate)
+        wineserver = find_wineserver(wine)
         if sys.platform != "linux":
             absent.append("preview currently requires Linux")
         if not wine:

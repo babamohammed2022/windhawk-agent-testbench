@@ -332,3 +332,30 @@ def test_path_traversal_metadata_is_rejected_before_artifact_creation():
         else:
             raise AssertionError("path traversal metadata accepted")
         assert not (Path(td) / ".sandbox/previews").exists()
+
+
+def test_wineserver64_is_found_beside_the_selected_wine_without_a_path_wrapper():
+    with temporary() as td, patch.dict(os.environ, {}, clear=True), \
+         patch.object(preview.shutil, "which", return_value=None):
+        wine = Path(td) / "wine64"
+        server = Path(td) / "wineserver64"
+        wine.touch()
+        server.touch()
+        server.chmod(0o755)
+        assert preview.find_wineserver(str(wine)) == str(server)
+
+
+def test_invalid_wineserver_override_is_not_silently_replaced():
+    with patch.dict(os.environ, {"AWT_WINESERVER": "missing-explicit-server"}), \
+         patch.object(preview.shutil, "which", return_value=None):
+        assert preview.find_wineserver("wine") is None
+
+
+def test_debian_private_wineserver64_fallback():
+    from tests.unit.harness import require
+    require(os.name == "posix", "Debian filesystem layout only applies to POSIX")
+    with patch.dict(os.environ, {}, clear=True), \
+         patch.object(preview.shutil, "which", return_value=None), \
+         patch.object(preview.Path, "is_file", side_effect=[False, False, True]), \
+         patch.object(preview.os, "access", return_value=True):
+        assert preview.find_wineserver("/usr/bin/wine64") == "/usr/lib/wine/wineserver64"
