@@ -87,6 +87,7 @@ def test_html_embeds_only_successful_captures():
 @contextmanager
 def ready(root):
     with patch.object(preview, "ROOT", Path(root)), \
+         patch.object(preview.sys, "platform", "linux"), \
          patch.object(preview.builder, "missing_toolchain", return_value=[]), \
          patch.object(preview.host_env, "find_wine", return_value="wine"), \
          patch.object(preview.shutil, "which", side_effect=lambda tool: tool), \

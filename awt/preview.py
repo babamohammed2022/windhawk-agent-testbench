@@ -270,7 +270,7 @@ def generate(mod_path, settings_override=None, settle_ms=800):
             candidate = Path(wine).resolve().parent / "wineserver"
             if candidate.is_file():
                 wineserver = str(candidate)
-        if os.name != "posix" or sys.platform != "linux":
+        if sys.platform != "linux":
             absent.append("preview currently requires Linux")
         if not wine:
             absent.append("Wine")
