@@ -93,6 +93,12 @@ jobs:
             # stderr from tests that assert refusals, so they are not annotated.
             names=$(grep -E "^=== FAIL" .sandbox/acceptance.log | sed 's/^=== FAIL //' | paste -sd, - | cut -c1-380)
             echo "::error::failing tests: ${names:-none matched, see the artifact log}"
+            # Runtime failures are not named like Python unit failures. Publish
+            # the tail as readable annotations too (artifact hosts may be blocked
+            # in the agent sandbox). Preserve the original suite exit code.
+            tail -n 45 .sandbox/acceptance.log | while IFS= read -r line; do
+              echo "::error::acceptance: $(printf '%s' "$line" | cut -c1-600 | sed 's/%/%25/g')"
+            done
             awk '/^=== FAIL/{keep=14} keep>0{print; keep--}' .sandbox/acceptance.log \
               | head -n 40 | while IFS= read -r line; do
                 echo "::error::$(printf '%s' "$line" | cut -c1-380 | sed 's/%/%25/g')"
