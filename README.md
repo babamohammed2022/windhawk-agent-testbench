@@ -89,6 +89,25 @@ mod comparisons, followed by calibration against real Windhawk on Windows client
 The expanded C++ activity driver still needs runtime acceptance on a Wine/MinGW
 machine; Python unit tests alone cannot validate it.
 
+## Simulated desktop lab (Feature 5)
+
+A repeatable Win32 scene under Wine/Xvfb for mods that create windows, menus or
+flyouts. It is **not** Explorer and not a Windows shell; it loads the mod through
+this bench's shim, runs a scripted interaction and captures the whole simulated
+desktop with concrete assertions.
+
+```bash
+python3 -m awt.desktop examples/visual-playground.wh.cpp
+python3 -m awt.desktop --no-mod           # negative control
+python3 -m awt.cli desktop mod.wh.cpp
+```
+
+Each attempt writes `.sandbox/desktop/<id>/report.json`, logs and `capture.png`.
+`status: passed` means the scene, capture and assertions were observed in that
+Wine process; it never means "works on real Windows". Missing Wine/MinGW/Xvfb
+returns exit 3 with `not_executed`. Details, action language, sources and
+licensing notes: [`docs/desktop-lab.md`](docs/desktop-lab.md).
+
 ## Symbol matrix — shell mods, checked on Linux (Feature 1)
 The bench cannot hook `twinui.pcshell.dll` under Wine, but it *can* answer the
 question that decides whether such a mod does anything at all: does the internal
@@ -197,6 +216,7 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 - `docs/` — `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
   `backends.md`, `vm-protocol.md`, `reference-vms.md`, `visual-diff.md`, official
   headers cache.
+- `host/desktop.cpp`, `awt/desktop.py` — scripted simulated desktop: windows, taskbar, notification area, input messages, capture and assertions.
 - `awt/prgate.py`, `awt/prgate_runner.py` — offline replay of Windhawk's PR validators;
   `third_party/windhawk-pr-validation/` holds the hash-pinned upstream scripts and data snapshot.
 - `tools/refresh_prgate_snapshot.py` — refreshes that public, metadata-only snapshot.

@@ -148,7 +148,17 @@
     deadlock. These sections never change the legacy verdict level; in particular
     that level alone still does not reliably express timeouts. Batch CI separately
     fails explicit timeouts/crashes in runtime data.
-28. **Overrides and lifecycle are not a complete reload test.** Overrides support
+28. **The simulated desktop is not a shell (implementation added 2026-11-25).**
+    `host/desktop.cpp` is an original Win32 scene with custom-drawn windows,
+    taskbar and notification area; it is deliberately named `awt-desktop.exe`,
+    never `explorer.exe`, and its classes are not `Shell_TrayWnd`. The scripted
+    clicks/keys in the default scenario are synthetic `WM_*` messages; the
+    `SendInput` commands only report what the API returned. The scene was **not
+    compiled or executed in the development sandbox** (no Wine/MinGW/Xvfb), so
+    its runtime acceptance is `not_executed` here. Its report is additive: it
+    never upgrades the legacy verdict level and never asserts real Windows or
+    Windhawk-engine behaviour.
+29. **Overrides and lifecycle are not a complete reload test.** Overrides support
     flat integer/boolean/string values; the minimal shim does not decode JSON
     escapes, so overrides requiring those are refused. The VM backend explicitly
     refuses overrides until the guest protocol supports them. A settings callback

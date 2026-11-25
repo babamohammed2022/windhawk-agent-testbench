@@ -1,12 +1,14 @@
 #!/bin/bash
 # Acceptance suite of the tool itself (section 8 criteria).
 #
-# Two stages, deliberately separated:
+# Stages, deliberately separated:
 #   1. unit tests  — pure Python, no Wine, always executed (offline-safe);
 #   2. acceptance  — builds and runs mods under Wine; needs the toolchain that
 #                    ./setup.sh installs. When the toolchain is absent the stage
 #                    is reported SKIPPED (exit 2), never silently passed: nothing
-#                    was executed, so nothing is claimed.
+#                    was executed, so nothing is claimed;
+#   3. real visual playground capture and comparison;
+#   4. real simulated-desktop scene, scripted actions and pixel assertions.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
@@ -98,3 +100,6 @@ echo "=== stage 3: real Wine visual preview acceptance ==="
 # Toolchain was available in stage 2: a missing preview prerequisite is an
 # incomplete acceptance run, not a green check. Standalone script uses exit 3.
 "$PYTHON" tests/run_preview_tests.py || exit 1
+
+echo "=== stage 4: real Wine simulated desktop acceptance ==="
+"$PYTHON" tests/run_desktop_tests.py || exit 1

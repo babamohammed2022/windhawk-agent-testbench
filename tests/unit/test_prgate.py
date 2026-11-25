@@ -16,9 +16,7 @@ from pathlib import Path
 
 from tests.unit.harness import optional_import
 
-optional_import("yaml")  # the vendored upstream validator requires PyYAML
-
-from awt import prgate  # noqa: E402  (skip above must run first)
+from awt import prgate  # noqa: E402  (import itself needs no third-party package)
 
 ROOT = prgate.ROOT
 FIXTURES = ROOT / "tests" / "fixtures" / "prgate"
@@ -26,7 +24,14 @@ AUTHOR = "awt-prgate-fixture"
 AUTHOR_ID = 1234567
 
 
+def require_yaml():
+    # The vendored upstream validator needs PyYAML. Skip inside each test, not
+    # at import time, so the unit runner can still report a clean skip.
+    optional_import("yaml")
+
+
 def run(mod: Path, body: Path, *extra: str):
+    require_yaml()
     sandbox = ROOT / ".sandbox"
     sandbox.mkdir(exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix="prgate-test-", dir=sandbox)) / "report.json"
@@ -50,6 +55,7 @@ def gate(report: dict, gate_id: str) -> dict:
 
 
 def test_snapshot_integrity():
+    require_yaml()
     """Vendored upstream code and cached data are checked, not trusted blindly."""
     data = prgate.load_snapshot()
     manifest = data["manifest"]
