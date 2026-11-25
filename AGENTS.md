@@ -166,11 +166,16 @@ python3 tests/run_desktop_tests.py                # real Wine, exit 3 if unavail
 Read `status`, `assertions`, `verification.verified`, `verification.simulated` and
 `verification.not_verifiable_here` literally. `passed` means: this bespoke Win32
 scene, loaded in-process through the shim, produced these observed pixels and markers.
-The process is `awt-desktop.exe`, **not** explorer.exe; its classes are not Explorer's.
+The process is `awt-desktop.exe`, **not** explorer.exe. The Win10 profile may
+register a synthetic child class named `Shell_TrayWnd` inside that process; it is
+still not Explorer and never replaces the shell.
 Never say "loaded into Explorer", "verified on Windows" or "the mod works" from this.
 `input-click`/`input-key` only report what `SendInput` returned; the default scenario
 uses synthetic WM_* messages. Internal-symbol hooks stay `not_verifiable_here`.
-See `docs/desktop-lab.md` for the architecture, sources and licensing constraints:
+Use `--scenario taskbar-compat` / `tests/run_taskbar_probe.py` only to observe a
+real mod's build/init refusals and errors; never claim that Explorer, resource
+downloads or internal-symbol hooks work here. See `docs/desktop-lab.md` for the
+architecture, sources and licensing constraints:
 no ReactOS code/assets, no leaked Windows code; raise licensing doubts with the maintainer.
 
 ## 5. Iteration rules

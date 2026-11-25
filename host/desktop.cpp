@@ -6,6 +6,7 @@
 // scripted action language, and saves a top-down 32-bit BMP of its client area.
 // All observations it prints are about THIS process and THIS simulated scene.
 #include <windows.h>
+#include <shellapi.h>
 #include <cstdio>
 #include <cwchar>
 #include <sstream>
@@ -27,8 +28,12 @@ struct DeskWindow {
 };
 
 static HWND g_surface = nullptr;
+static HWND g_taskbar_strip = nullptr;
 static std::vector<DeskWindow> g_windows;
 static std::wstring g_active;
+static std::wstring g_profile = L"win10";
+static bool g_shell_conflict = false;
+static bool g_appbar_registered = false;
 static bool g_notice = false;
 static const wchar_t* g_capture = nullptr;
 static int g_settle = 500;
@@ -53,6 +58,85 @@ static void Mark(const char* text) {
 static void MarkW(const char* label, const std::wstring& value) {
     printf("[awt-desktop] %s=%ls\n", label, value.c_str());
     fflush(stdout);
+}
+
+static void LogError(const char* what, DWORD error) {
+    printf("[awt-desktop] error %s err=%lu\n", what, (unsigned long)error);
+    fflush(stdout);
+}
+
+static LONG WINAPI DesktopExceptionFilter(EXCEPTION_POINTERS* info) {
+    DWORD code = info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionCode : 0;
+    void* address = info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionAddress : nullptr;
+    printf("[awt-desktop] unhandled-exception code=0x%08lx address=%p\n",
+           (unsigned long)code, address);
+    fflush(stdout);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static BOOL CALLBACK ProbeWindow(HWND window, LPARAM) {
+    if (!IsWindowVisible(window)) return TRUE;
+    wchar_t cls[128] = {};
+    wchar_t title[128] = {};
+    GetClassNameW(window, cls, 128);
+    GetWindowTextW(window, title, 128);
+    printf("[awt-desktop] probe class=%ls title=%ls\n", cls, title);
+    fflush(stdout);
+    if (!wcscmp(cls, L"Shell_TrayWnd")) g_shell_conflict = true;
+    return TRUE;
+}
+
+static void ProbeDesktop() {
+    Mark("probe begin");
+    EnumWindows(ProbeWindow, 0);
+    printf("[awt-desktop] probe end shell_tray_conflict=%d\n", g_shell_conflict ? 1 : 0);
+    fflush(stdout);
+}
+
+static void RegisterAppBar() {
+    APPBARDATA bar = {};
+    bar.cbSize = sizeof(bar);
+    bar.hWnd = g_surface;
+    bar.uEdge = ABE_BOTTOM;
+    int screen_x = GetSystemMetrics(SM_CXSCREEN);
+    int screen_y = GetSystemMetrics(SM_CYSCREEN);
+    bar.rc.left = 0;
+    bar.rc.top = screen_y - 52;
+    bar.rc.right = screen_x;
+    bar.rc.bottom = screen_y;
+    UINT_PTR added = SHAppBarMessage(ABM_NEW, &bar);
+    printf("[awt-desktop] appbar ABM_NEW returned=%llu\n",
+           (unsigned long long)added);
+    fflush(stdout);
+    if (added) {
+        UINT_PTR positioned = SHAppBarMessage(ABM_SETPOS, &bar);
+        printf("[awt-desktop] appbar ABM_SETPOS returned=%llu bottom=%ld\n",
+               (unsigned long long)positioned, (long)bar.rc.bottom);
+        fflush(stdout);
+        g_appbar_registered = true;
+    } else {
+        LogError("appbar ABM_NEW unavailable", GetLastError());
+    }
+    RECT work = {};
+    if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0)) {
+        printf("[awt-desktop] workarea left=%ld top=%ld right=%ld bottom=%ld\n",
+               (long)work.left, (long)work.top, (long)work.right, (long)work.bottom);
+        fflush(stdout);
+    } else {
+        LogError("SPI_GETWORKAREA unavailable", GetLastError());
+    }
+}
+
+static void UnregisterAppBar() {
+    if (!g_appbar_registered) return;
+    APPBARDATA bar = {};
+    bar.cbSize = sizeof(bar);
+    bar.hWnd = g_surface;
+    UINT_PTR removed = SHAppBarMessage(ABM_REMOVE, &bar);
+    printf("[awt-desktop] appbar ABM_REMOVE returned=%llu\n",
+           (unsigned long long)removed);
+    fflush(stdout);
+    g_appbar_registered = false;
 }
 
 static DeskWindow* Find(const std::wstring& id) {
@@ -91,30 +175,55 @@ static void RedrawScene() {
     }
 }
 
-static void DrawTaskbar(HDC dc, int width, int height) {
-    RECT bar = {0, height - 52, width, height};
+// Public GDI drawing of a Windows-10-like bar: Start, search, task buttons and
+// a notification area. These are pixels in OUR window, not native shell controls.
+static void DrawTaskbar(HDC dc, int width, int top, int bottom) {
+    RECT bar = {0, top, width, bottom};
     Fill(dc, bar, kTaskbar);
-    RECT label = {16, height - 42, 320, height - 12};
-    DrawLabel(dc, label, L"AWT simulated taskbar", RGB(226, 235, 248));
-    int x = 340;
+    int y = top;
+    bool win10 = g_profile == L"win10";
+
+    if (win10) {
+        RECT start = {8, y + 7, 72, y + 45};
+        Fill(dc, start, kTitleActive);
+        RECT start_text = {14, y + 9, 70, y + 43};
+        DrawLabel(dc, start_text, L"Start", RGB(255, 255, 255));
+        RECT search = {80, y + 9, 252, y + 43};
+        Fill(dc, search, RGB(245, 247, 250));
+        RECT search_text = {90, y + 10, 248, y + 42};
+        DrawLabel(dc, search_text, L"Search", RGB(90, 98, 110));
+        RECT view = {260, y + 9, 302, y + 43};
+        Fill(dc, view, kTitleIdle);
+        DrawLabel(dc, view, L"[]", RGB(255, 255, 255));
+    } else {
+        RECT label = {16, y + 8, 320, y + 44};
+        DrawLabel(dc, label, L"AWT simulated taskbar", RGB(226, 235, 248));
+    }
+
+    int x = win10 ? 312 : 340;
     for (const auto& window : g_windows) {
         if (window.closed) continue;
-        RECT item = {x, height - 44, x + 130, height - 10};
+        RECT item = {x, y + 8, x + 124, y + 44};
         Fill(dc, item, window.id == g_active ? kTitleActive : kTitleIdle);
-        RECT text = {x + 8, height - 42, x + 126, height - 12};
+        RECT text = {x + 8, y + 9, x + 120, y + 43};
         std::wstring caption = window.minimized ? L"o " : L"| ";
         caption += window.id;
         DrawLabel(dc, text, caption.c_str(), RGB(255, 255, 255));
-        x += 140;
+        x += 132;
     }
-    RECT tray = {width - 44, height - 42, width - 18, height - 16};
+
+    RECT clock = {width - 176, y + 8, width - 74, y + 44};
+    DrawLabel(dc, clock, L"12:00", RGB(230, 238, 248));
+    RECT tray = {width - 44, y + 8, width - 18, y + 42};
     Fill(dc, tray, kTray);
-    if (g_notice) {
-        RECT bubble = {width - 274, height - 210, width - 20, height - 58};
-        Fill(dc, bubble, kNotice);
-        RECT note = {width - 262, height - 196, width - 34, height - 74};
-        DrawLabel(dc, note, L"Simulated notification", RGB(40, 36, 24));
-    }
+}
+
+static void DrawNotice(HDC dc, int width, int height) {
+    if (!g_notice) return;
+    RECT bubble = {width - 274, height - 210, width - 20, height - 58};
+    Fill(dc, bubble, kNotice);
+    RECT note = {width - 262, height - 196, width - 34, height - 74};
+    DrawLabel(dc, note, L"Simulated notification", RGB(40, 36, 24));
 }
 
 // Top-down, uncompressed BGRA BMP. The Python side validates and converts it.
@@ -219,6 +328,22 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wp, LPARAM 
     return DefWindowProcW(window, message, wp, lp);
 }
 
+// Optional child strip: in the Win10 profile we register a window called
+// Shell_TrayWnd when no such window exists on this desktop. It is drawn by us
+// from public GDI calls; the name is an approximation, not the real shell.
+static LRESULT CALLBACK StripProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+    if (message == WM_PAINT) {
+        PAINTSTRUCT paint = {};
+        HDC dc = BeginPaint(window, &paint);
+        RECT client = {};
+        GetClientRect(window, &client);
+        DrawTaskbar(dc, client.right, 0, client.bottom);
+        EndPaint(window, &paint);
+        return 0;
+    }
+    return DefWindowProcW(window, message, wp, lp);
+}
+
 static LRESULT CALLBACK SurfaceProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (message == WM_PAINT) {
         PAINTSTRUCT paint = {};
@@ -230,7 +355,10 @@ static LRESULT CALLBACK SurfaceProc(HWND window, UINT message, WPARAM wp, LPARAM
             RECT stripe = {x, 0, x + 2, client.bottom - 52};
             Fill(dc, stripe, RGB(36, 51, 73));
         }
-        DrawTaskbar(dc, client.right, client.bottom);
+        if (!g_taskbar_strip) {
+            DrawTaskbar(dc, client.right, client.bottom - 52, client.bottom);
+        }
+        DrawNotice(dc, client.right, client.bottom);
         EndPaint(window, &paint);
         ++g_paints;
         return 0;
@@ -246,12 +374,13 @@ static LRESULT CALLBACK SurfaceProc(HWND window, UINT message, WPARAM wp, LPARAM
             Mark("capture written");
             g_result = 0;
         } else {
-            Mark("capture failed (or no paint observed)");
+            LogError("capture failed (or no paint observed)", GetLastError());
         }
         DestroyWindow(window);
         return 0;
     }
     if (message == WM_DESTROY) {
+        UnregisterAppBar();
         PostQuitMessage(0);
         return 0;
     }
@@ -466,27 +595,37 @@ int wmain(int argc, wchar_t** argv) {
         else if (!wcscmp(argv[i], L"--mod") && i + 1 < argc) mod_path = argv[++i];
         else if (!wcscmp(argv[i], L"--actions") && i + 1 < argc) script_path = argv[++i];
         else if (!wcscmp(argv[i], L"--settle-ms") && i + 1 < argc) g_settle = _wtoi(argv[++i]);
+        else if (!wcscmp(argv[i], L"--profile") && i + 1 < argc) g_profile = argv[++i];
         else { Mark("invalid argument"); return 2; }
     }
     if (!g_capture || !script_path || g_settle < 100 || g_settle > 10000) return 2;
+    if (g_profile != L"win10" && g_profile != L"basic") return 2;
     SetProcessDPIAware();
+    SetUnhandledExceptionFilter(DesktopExceptionFilter);
+    MarkW("profile", g_profile);
 
     if (mod_path) {
         HMODULE mod = LoadLibraryW(mod_path);
         if (!mod) {
             printf("[awt-host] load failed err=%lu\n", GetLastError());
+            fflush(stdout);
             return 3;
         }
         auto init = (BOOL(*)())GetProcAddress(mod, "Wh_ModInit");
         BOOL ok = init ? init() : FALSE;
         printf("[awt-host] init returned %d\n", (int)ok);
         fflush(stdout);
-        if (!ok) return 4;
+        if (!ok) {
+            LogError("mod init returned false", 4);
+            return 4;
+        }
         auto applied = (BOOL(*)())GetProcAddress(mod, "AwtModInitReturned");
         if (!applied || !applied()) { Mark("hook application failed"); return 5; }
         auto after = (void(*)())GetProcAddress(mod, "Wh_ModAfterInit");
         if (after) after();
     }
+
+    ProbeDesktop();
 
     HINSTANCE instance = GetModuleHandleW(nullptr);
     WNDCLASSEXW surface_class = {};
@@ -496,7 +635,10 @@ int wmain(int argc, wchar_t** argv) {
     surface_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     surface_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     surface_class.lpszClassName = L"AwtDesktopSurface";
-    if (!RegisterClassExW(&surface_class)) return 6;
+    if (!RegisterClassExW(&surface_class)) {
+        LogError("RegisterClassExW surface", GetLastError());
+        return 6;
+    }
 
     WNDCLASSEXW window_class = {};
     window_class.cbSize = sizeof(window_class);
@@ -505,7 +647,32 @@ int wmain(int argc, wchar_t** argv) {
     window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     window_class.lpszClassName = L"AwtDesktopWindow";
-    if (!RegisterClassExW(&window_class)) return 7;
+    if (!RegisterClassExW(&window_class)) {
+        LogError("RegisterClassExW window", GetLastError());
+        return 7;
+    }
+
+    bool emulate_shell = g_profile == L"win10" && !g_shell_conflict;
+    const wchar_t* strip_class = emulate_shell ? L"Shell_TrayWnd" : L"AwtTaskbarStrip";
+    WNDCLASSEXW strip_class_def = {};
+    strip_class_def.cbSize = sizeof(strip_class_def);
+    strip_class_def.lpfnWndProc = StripProc;
+    strip_class_def.hInstance = instance;
+    strip_class_def.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    strip_class_def.lpszClassName = strip_class;
+    if (!RegisterClassExW(&strip_class_def)) {
+        LogError("RegisterClassExW strip", GetLastError());
+        emulate_shell = false;
+        strip_class = L"AwtTaskbarStrip";
+        strip_class_def.lpszClassName = strip_class;
+        if (!RegisterClassExW(&strip_class_def)) {
+            LogError("RegisterClassExW fallback strip", GetLastError());
+            return 7;
+        }
+    }
+    printf("[awt-desktop] shell_class_emulation=%d class=%ls\n",
+           emulate_shell ? 1 : 0, strip_class);
+    fflush(stdout);
 
     // Force a 960x600 client area; window decorations differ between builds.
     RECT bounds = {0, 0, 960, 600};
@@ -514,12 +681,26 @@ int wmain(int argc, wchar_t** argv) {
                                 WS_OVERLAPPEDWINDOW, 0, 0,
                                 bounds.right - bounds.left, bounds.bottom - bounds.top,
                                 nullptr, nullptr, instance, nullptr);
-    if (!g_surface) return 8;
+    if (!g_surface) {
+        LogError("CreateWindowExW surface", GetLastError());
+        return 8;
+    }
+    g_taskbar_strip = CreateWindowExW(0, strip_class, L"", WS_CHILD | WS_VISIBLE,
+                                      0, 600 - 52, 960, 52, g_surface, nullptr,
+                                      instance, nullptr);
+    if (!g_taskbar_strip) {
+        LogError("CreateWindowExW strip", GetLastError());
+        g_taskbar_strip = nullptr;
+    }
+    RegisterAppBar();
     ShowWindow(g_surface, SW_SHOWNOACTIVATE);
     UpdateWindow(g_surface);
 
     bool script_ok = RunScript(script_path);
-    if (!script_ok) Mark("script contained a failed action");
+    if (!script_ok) {
+        Mark("script contained a failed action");
+        LogError("scripted action failed", 0);
+    }
 
     RedrawScene();
     UpdateWindow(g_surface);
@@ -527,7 +708,11 @@ int wmain(int argc, wchar_t** argv) {
         if (item.hwnd) UpdateWindow(item.hwnd);
     }
     g_started = GetTickCount64();
-    if (!SetTimer(g_surface, 1, 50, nullptr)) { DestroyWindow(g_surface); return 9; }
+    if (!SetTimer(g_surface, 1, 50, nullptr)) {
+        LogError("SetTimer", GetLastError());
+        DestroyWindow(g_surface);
+        return 9;
+    }
 
     MSG message;
     int received;

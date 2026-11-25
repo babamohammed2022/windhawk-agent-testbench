@@ -17,6 +17,10 @@ experiments; it does not replace Windows calibration.
   [DrawTextW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-drawtextw),
   [BitBlt](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-bitblt),
   [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput),
+  [SHAppBarMessage](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shappbarmessage),
+  [SystemParametersInfoW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow),
+  [EnumWindows](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumwindows),
+  [SetUnhandledExceptionFilter](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-setunhandledexceptionfilter),
   `WM_*` messages and `SetWindowPos`) and from black-box observations of the
   existing `host/playground.cpp` specimen in this repo. Those documentation
   URLs were not probed from the development sandbox; they name the public API
@@ -25,7 +29,11 @@ experiments; it does not replace Windows calibration.
   documentation was copied.** No leaked, decompiled or otherwise illegally
   obtained Windows code was used.
 * The mod used by the first scenario is the repository's own
-  `examples/visual-playground.wh.cpp`, unmodified. The PR-validation snapshot in
+  `examples/visual-playground.wh.cpp`, unmodified. A second, **optional**
+  scenario can load the public upstream mod `win81-taskbar-recreation`
+  (`Windows 7/8/8.1 Taskbar Recreation`) from a user-supplied clone. That mod is
+  GPL-3.0-or-later and is **not vendored**, copied or adapted here; the lab reads
+  its source at the path you pass and reports build/init outcomes only. The PR-validation snapshot in
   `third_party/windhawk-pr-validation/` is a separate, explicitly attributed
   upstream component and is not used by this lab.
 * Licensing is **not** asserted to be automatically resolved by this choice.
@@ -42,6 +50,12 @@ python3 -m awt.desktop examples/visual-playground.wh.cpp
 python3 -m awt.desktop --no-mod               # negative control, no mod loaded
 python3 -m awt.cli desktop examples/visual-playground.wh.cpp \
     --settings enabled=false --no-mod-effect   # mod loaded, accent expected to be absent
+
+# Optional trial of a real public mod from your own clone of windhawk-mods.
+# The path below is only a local example; nothing is downloaded or vendored.
+python3 tests/run_taskbar_probe.py --mod ~/src/windhawk-mods/mods/win81-taskbar-recreation.wh.cpp
+python3 -m awt.desktop ~/src/windhawk-mods/mods/win81-taskbar-recreation.wh.cpp \
+    --scenario taskbar-compat --no-mod-effect
 ```
 
 Equivalently: `python3 -m awt.cli desktop <mod>`.
@@ -53,6 +67,27 @@ substituted). Every attempt writes `.sandbox/desktop/<timestamp-id>/report.json`
 `xvfb.log` and `cleanup.log`. Wine prefixes are created fresh per attempt and
 removed only after `wineserver -k`/`-w` completed; no global `pkill` is used.
 
+### Surface profiles and shell-like details
+
+Two profiles are available: `win10` (default for both scenarios) adds a
+Windows-10-like Start/search strip, task buttons and a tray drawn with public
+GDI calls, and `basic` keeps the earlier minimal strip. `--profile` overrides
+the scenario default. The host logs the selected profile, a `EnumWindows` probe
+of visible windows, `SHAppBarMessage(ABM_NEW/ABM_SETPOS/ABM_REMOVE)` results and
+`SPI_GETWORKAREA` when available. All failures are written as
+`[awt-desktop] error ...` lines and copied into `report.json: errors`; an
+unhandled exception is logged through `SetUnhandledExceptionFilter` as
+`unhandled-exception`. The `no_crash` assertion fails if either crash marker is
+present.
+
+In the `win10` profile, when the probe finds no existing `Shell_TrayWnd`, the
+host registers a **synthetic child window class with that name inside
+`awt-desktop.exe`**. It is our own GDI-drawn strip, not Explorer, not the real
+shell, and not a shell replacement; the probe suppresses it when another window
+already uses the class. `report.json: shell_class_emulation` records whether it
+was used. Do not interpret `appbar` or class-name markers as shell integration:
+they only describe calls made by this process.
+
 ## Architecture
 
 | Layer | File | Responsibility |
@@ -61,15 +96,17 @@ removed only after `wineserver -k`/`-w` completed; no global `pkill` is used.
 | Orchestration | `awt/desktop.py` | Validates the scenario, builds the mod with `builder.build()`, starts Xvfb/prefix using `preview.display_session` and `preview._command`, applies timeouts, converts BMP via `preview.decode_capture`, evaluates assertions, cleans up in `finally`, writes the report. |
 | CLI | `awt/cli.py` | `desktop` subcommand. |
 | Runtime acceptance | `tests/run_desktop_tests.py` | Two real Wine runs with the existing demo mod (enabled and disabled), with pixel assertions and cleanup checks. |
+| Optional real-mod probe | `tests/run_taskbar_probe.py` | Runs `taskbar-compat` with a user-supplied public taskbar mod; exit 0 = honest observation (including a clean refusal), 1 = crash/unexpected result, 3 = unavailable. |
 | Unit tests | `tests/unit/test_desktop.py` | Action whitelist, marker parsing, assertion logic, isolated/not-executed paths, cleanup on timeout, CLI codes. Images there are generated fixtures, never presented as captures. |
 
 The process is named **`awt-desktop.exe`**, not `explorer.exe`. This is a
 deliberate decision: Wine has its own `explorer.exe`, a lookalike name would
 invite the false conclusion that a mod was loaded into the Windows shell, and
 the host Explorer is never replaced or modified. Custom window classes
-(`AwtDesktopSurface`, `AwtDesktopWindow`) are not `Shell_TrayWnd` or any other
-Explorer class. The report states this explicitly under `process.explorer:
-false`.
+(`AwtDesktopSurface`, `AwtDesktopWindow`) are not Explorer classes. The optional
+`win10` profile can register a synthetic child class named `Shell_TrayWnd`
+inside this process; even then the report states explicitly under
+`process.explorer: false` that this is not Explorer or the Windows shell.
 
 The scene and windows are children of one surface, so one `BitBlt` captures the
 whole simulated desktop, including the taskbar and notification area. The mod is
@@ -94,7 +131,9 @@ the C++ host:
 | `wait <ms>` / `capture` | pause or mark the scheduled capture |
 
 The default `accent-notice` scenario creates `alpha` and `beta`, activates
-`alpha`, clicks its notice button, minimizes and closes `beta`, then captures. The exact
+`alpha`, clicks its notice button, minimizes and closes `beta`, then captures.
+`taskbar-compat` performs a similar scene without accent-pixel assertions so a
+real mod can be observed even when it cannot affect our process. The exact
 heading drawn in `alpha` is the demo mod's stable hook target,
 `"Windhawk visual playground"`. Adding a scenario means adding a validated
 action list and its assertions to `SCENARIOS` in `awt/desktop.py`; no external
@@ -135,13 +174,19 @@ parts that exist only in the lab. `not_verifiable_here` and
   scenario uses deterministic Win32 messages and does not claim that real device
   input was verified.
 * No mod is ever claimed to be loaded into `explorer.exe`, `twinui.pcshell.dll`
-  or a real shell process.
+  or a real shell process. For `win81-taskbar-recreation` in particular,
+  symbol hooks, resource downloads, Start-menu reconstruction and Explorer
+  integration are `not_verifiable_here`: a build refusal, init refusal or
+  missing symbol must be reported as such, never as a working recreation.
+* `report.json: mod_analysis` is a **textual** heuristic. It may list strings
+  from comments, and it never proves that a hook was applied.
 
 ## Tests
 
 ```bash
 python3 tests/unit/run_unit.py desktop           # offline logic; always runnable
 python3 tests/run_desktop_tests.py               # real Wine scene; exit 3 if unavailable
+python3 tests/run_taskbar_probe.py                # real mod trial; exit 3 if unavailable
 bash tests/run_tests.sh                          # adds the stage-4 runtime check
 ```
 
@@ -152,4 +197,11 @@ prefixes) and fails the job when the desktop stage fails or cannot execute.
 In the development sandbox for this change Wine, MinGW and Xvfb are absent:
 only the offline unit tests were executed there. The C++ scene has **not** been
 compiled or run in that sandbox, and its runtime acceptance is reported as
-`not_executed`, never as passed.
+`not_executed`, never as passed. The same is true of the real-mod probe: on
+2026-11-25 `tests/run_taskbar_probe.py` returned **exit 3 / not_executed**
+because MinGW, Wine, wineserver and Xvfb were missing. Its report recorded a
+bounded textual analysis of `win81-taskbar-recreation` (including
+`HookSymbols`, `SYMBOL_HOOK` and Explorer/PDB-related modules) as
+`not_verifiable_here`; **no build, load, init, hook or screenshot was observed**.
+That is a probe of availability and source metadata, not evidence that the
+taskbar recreation works.

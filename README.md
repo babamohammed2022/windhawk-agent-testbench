@@ -100,9 +100,16 @@ desktop with concrete assertions.
 python3 -m awt.desktop examples/visual-playground.wh.cpp
 python3 -m awt.desktop --no-mod           # negative control
 python3 -m awt.cli desktop mod.wh.cpp
+python3 -m awt.desktop mod.wh.cpp --scenario taskbar-compat --no-mod-effect
+python3 tests/run_taskbar_probe.py --mod /path/to/win81-taskbar-recreation.wh.cpp
 ```
 
-Each attempt writes `.sandbox/desktop/<id>/report.json`, logs and `capture.png`.
+The default surface is a Win10-like strip drawn with public GDI calls;
+`--profile basic` restores the minimal strip. A probe logs visible windows,
+appbar calls and any errors/crash markers. `taskbar-compat` observes a real
+public taskbar-recreation mod from a user-supplied clone; it does not vendor it
+or claim that Explorer/symbol-hook behaviour works. Each attempt writes
+`.sandbox/desktop/<id>/report.json`, logs and `capture.png`.
 `status: passed` means the scene, capture and assertions were observed in that
 Wine process; it never means "works on real Windows". Missing Wine/MinGW/Xvfb
 returns exit 3 with `not_executed`. Details, action language, sources and

@@ -51,6 +51,11 @@ def main():
                 assert accent < 100, "disabled demo unexpectedly painted the accent"
             assert result["cleanup"]["ok"] is True, "cleanup did not complete"
             assert result["process"]["explorer"] is False
+            assert result["profile"] == "win10", "the Win10-like profile was not selected"
+            assert result["shell_probe"], "no EnumWindows probe was logged"
+            assert result["appbar"], "no appbar call was logged"
+            assert any(a["id"] == "no_crash" and a["passed"]
+                       for a in result["assertions"]), "no crash assertion was checked"
             print("PASS: scripted windows, click, notice, capture, accent assertion "
                   "and cleanup (enabled=%s)" % enabled, flush=True)
         return 0

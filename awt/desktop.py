@@ -23,7 +23,7 @@ import sys
 import time
 import uuid
 
-from . import builder, env as host_env, metadata, png, preview, verdict
+from . import analyzer, builder, env as host_env, metadata, png, preview, verdict
 
 ROOT = Path(builder.REPO)
 DISCLAIMER = (
@@ -34,6 +34,8 @@ DISCLAIMER = (
 
 # Actions are validated here before they are handed to the C++ host. The host
 # has its own whitelist too; neither side executes shell commands.
+PROFILES = ("win10", "basic")
+
 ALLOWED_ACTIONS = {
     "create", "activate", "minimize", "restore", "close", "click", "key",
     "notify", "input-click", "input-key", "wait", "capture",
@@ -43,6 +45,7 @@ ACTION_MARKER_RE = re.compile(r"^\[awt-desktop\] (?P<text>.*)$")
 
 SCENARIOS = {
     "accent-notice": {
+        "profile": "win10",
         "description": (
             "Create two labelled windows, activate one, toggle a simulated "
             "notification with a synthetic mouse message, minimize the second "
@@ -70,6 +73,32 @@ SCENARIOS = {
              "rule": "at_least", "value": 1000},
             {"id": "accent_visible", "kind": "pixels", "rgb": [24, 95, 160],
              "rule": "at_least", "value": 10000},
+            {"id": "no_crash", "kind": "no_crash"},
+        ],
+    },
+    "taskbar-compat": {
+        "profile": "win10",
+        "description": (
+            "Same Win10-like surface, used to observe how a real Windhawk mod "
+            "behaves when loaded here: build/init refusals and errors are "
+            "reported, never presented as functional success."
+        ),
+        "actions": [
+            "create alpha 'Alpha window' 'Windhawk visual playground' 'First simulated client area'",
+            "create beta 'Beta window' 'Beta window: second test surface' 'Second simulated client area'",
+            "activate alpha",
+            "notify on",
+            "minimize beta",
+            "close beta",
+            "capture",
+        ],
+        "assertions": [
+            {"id": "two_windows", "kind": "marker", "contains": "action create id=alpha"},
+            {"id": "second_window", "kind": "marker", "contains": "action create id=beta"},
+            {"id": "notice_toggled", "kind": "marker", "contains": "action notify state=1 ok=1"},
+            {"id": "notice_visible", "kind": "pixels", "rgb": [250, 220, 120],
+             "rule": "at_least", "value": 1000},
+            {"id": "no_crash", "kind": "no_crash"},
         ],
     },
 }
@@ -134,10 +163,34 @@ def parse_desktop_output(output, mod_log=""):
         actions.append(entry)
         markers.append(entry)
     host_markers = verdict.parse_host_markers(output, mod_log)
+    errors = []
+    probe, appbar, shell_emulation = [], [], None
+    for line in (output or "").splitlines():
+        if ("[awt-desktop] error " in line or "[awt-host] load failed" in line or
+                "[awt-host] hook application failed" in line or
+                "[SHIM] " in line or "unhandled-exception" in line):
+            errors.append(line.strip())
+        if line.startswith("[awt-desktop] probe class="):
+            payload = line.split("[awt-desktop] ", 1)[1].split()
+            fields = dict(part.split("=", 1) for part in payload[1:] if "=" in part)
+            probe.append(fields)
+        if line.startswith("[awt-desktop] appbar "):
+            appbar.append(line.strip())
+        if line.startswith("[awt-desktop] shell_class_emulation="):
+            payload = line.split("[awt-desktop] ", 1)[1].split()
+            fields = dict(part.split("=", 1) for part in payload if "=" in part)
+            try:
+                shell_emulation = int(fields.get("shell_class_emulation", "0"))
+            except ValueError:
+                shell_emulation = None
     return {
         "actions": actions,
         "markers": markers,
         "host": host_markers,
+        "errors": errors,
+        "probe": probe,
+        "appbar": appbar,
+        "shell_class_emulation": shell_emulation,
         "script_failed": "script contained a failed action" in (output or ""),
         "captured": "capture written" in (output or ""),
     }
@@ -162,6 +215,11 @@ def evaluate_assertions(assertions, parsed, image=None):
             observed = parsed["host"]["init_returned"]
             detail = "host init marker"
             passed = observed is True
+        elif kind == "no_crash":
+            observed = bool(parsed["host"]["crashed"] or
+                            any("unhandled-exception" in e for e in parsed["errors"]))
+            detail = "no crash or unhandled-exception marker in host log"
+            passed = not observed
         elif kind == "pixels":
             observed = count_color(image, item["rgb"]) if image is not None else None
             detail = "rgb=%s %s %d" % (item["rgb"], item["rule"], item["value"])
@@ -175,6 +233,30 @@ def evaluate_assertions(assertions, parsed, image=None):
             "observed": observed, "expectation": detail,
         })
     return results
+
+
+def describe_mod_source(mod_path):
+    """Heuristic static view of a mod, available even when no build can run.
+
+    The analyzer is textual: it can over-report strings found in comments. It is
+    a prompt for what to check on real Windows, never proof that a hook ran.
+    """
+    source = Path(mod_path).read_text(encoding="utf-8", errors="replace")
+    analysis = analyzer.analyze(source)
+    out = {}
+    for key in ("public_hooks", "internal_hooks", "internal_modules"):
+        seen, values = set(), []
+        for value in analysis.get(key) or []:
+            value = str(value).strip()
+            if value and value not in seen:
+                seen.add(value)
+                values.append(value)
+            if len(values) == 12:
+                break
+        out[key] = values
+    out["note"] = ("Textual analysis of the mod source; may include comments. "
+                   "Not evidence that any hook was applied.")
+    return out
 
 
 def _hash(path):
@@ -196,12 +278,15 @@ def missing_prerequisites():
 
 
 def generate(mod_path=None, scenario="accent-notice", settings_override=None,
-             settle_ms=500, expect_mod_effect=True):
+             settle_ms=500, expect_mod_effect=True, profile=None):
     """Run one scenario, always write a report, never claim more than executed."""
     if scenario not in SCENARIOS:
         raise ValueError("unknown scenario: %r" % scenario)
     if not 100 <= settle_ms <= 10000:
         raise ValueError("settle-ms must be between 100 and 10000")
+    profile = profile or SCENARIOS[scenario].get("profile", "basic")
+    if profile not in PROFILES:
+        raise ValueError("unknown desktop profile: %r" % profile)
     actions = validate_actions(SCENARIOS[scenario]["actions"])
     output = ROOT / ".sandbox" / "desktop" / (time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:10])
     output.mkdir(parents=True)
@@ -211,7 +296,9 @@ def generate(mod_path=None, scenario="accent-notice", settings_override=None,
         "status": "not_executed",
         "scenario": scenario,
         "scenario_description": SCENARIOS[scenario]["description"],
+        "profile": profile,
         "actions": actions,
+        "errors": [],
         "mod": str(Path(mod_path).resolve()) if with_mod else None,
         "output": str(output),
         "disclaimer": DISCLAIMER,
@@ -245,6 +332,17 @@ def generate(mod_path=None, scenario="accent-notice", settings_override=None,
         "cleanup": {"performed": False, "ok": None},
     }
     report_path = output / "report.json"
+    if with_mod:
+        try:
+            result["mod_analysis"] = describe_mod_source(mod_path)
+            for symbol in result["mod_analysis"]["internal_hooks"]:
+                result["verification"]["not_verifiable_here"].append(
+                    "internal-symbols: %s" % symbol)
+            for module in result["mod_analysis"]["internal_modules"]:
+                result["verification"]["not_verifiable_here"].append(
+                    "internal-module: %s" % module)
+        except OSError as exc:
+            result["errors"].append("mod source not readable: %s" % exc)
     try:
         absent = missing_prerequisites()
         if absent:
@@ -303,6 +401,7 @@ def generate(mod_path=None, scenario="accent-notice", settings_override=None,
                 command = [wine, preview.windows_path(executable),
                            "--capture", preview.windows_path(output / "capture.bmp"),
                            "--actions", preview.windows_path(actions_file),
+                           "--profile", profile,
                            "--settle-ms", str(settle_ms)]
                 if build:
                     command.extend(["--mod", preview.windows_path(build["dll"])])
@@ -312,8 +411,19 @@ def generate(mod_path=None, scenario="accent-notice", settings_override=None,
                 parsed = parse_desktop_output(host_text, mod_text)
                 result["host"] = parsed["host"]
                 result["actions_observed"] = parsed["actions"]
+                result["errors"] = parsed["errors"]
+                result["shell_probe"] = parsed["probe"]
+                result["shell_class_emulation"] = parsed["shell_class_emulation"]
+                result["appbar"] = parsed["appbar"]
                 result["artifacts"].update(
                     host_log=str(log), mod_log=str(mod_log), stubs_log=str(stubs_log))
+                stubs_text = stubs_log.read_text(encoding="utf-8", errors="replace")
+                if "symbol lookup not available" in stubs_text + mod_text:
+                    result["shim_limits"] = ["internal symbol lookup not available in sandbox"]
+                    if "internal symbol lookup not available in sandbox" not in \
+                            result["verification"]["not_verifiable_here"]:
+                        result["verification"]["not_verifiable_here"].append(
+                            "internal symbol lookup not available in sandbox")
                 result["host"]["timed_out"] = timed_out
                 result["host"]["exit_code"] = code
                 if timed_out or code != 0 or not parsed["captured"] or parsed["script_failed"]:
@@ -383,6 +493,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="awt desktop")
     parser.add_argument("mod", nargs="?", help="mod to load (omit for a control run)")
     parser.add_argument("--scenario", default="accent-notice", choices=sorted(SCENARIOS))
+    parser.add_argument("--profile", choices=PROFILES, default=None,
+                        help="surface profile; the scenario default is win10")
     parser.add_argument("--no-mod", action="store_true", help="control run without a mod")
     parser.add_argument("--no-mod-effect", action="store_true",
                         help="keep the mod loaded but expect no visible accent (disabled setting)")
@@ -399,7 +511,8 @@ def main(argv=None):
         override = _load_settings_override(args.settings_json, args.settings)
         result = generate(None if args.no_mod else args.mod, args.scenario, override,
                           args.settle_ms,
-                          expect_mod_effect=not args.no_mod and not args.no_mod_effect)
+                          expect_mod_effect=not args.no_mod and not args.no_mod_effect,
+                          profile=args.profile)
     except (OSError, ValueError) as exc:
         print("error: %s" % exc, file=sys.stderr)
         return 2

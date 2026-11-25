@@ -268,7 +268,7 @@ def build_desktop(sandbox=None):
     os.makedirs(os.path.dirname(output), exist_ok=True)
     src = os.path.join(REPO, "host", "desktop.cpp")
     p = _run([CC, "-std=c++20", "-O1", "-DUNICODE", "-D_UNICODE", "-municode",
-              "-o", output, src, "-lkernel32", "-luser32", "-lgdi32",
+              "-o", output, src, "-lkernel32", "-luser32", "-lgdi32", "-lshell32",
               "-static-libgcc", "-static-libstdc++"])
     if p.returncode != 0 or not os.path.isfile(output):
         raise RuntimeError("desktop scene build failed: " + p.stderr[:4000])

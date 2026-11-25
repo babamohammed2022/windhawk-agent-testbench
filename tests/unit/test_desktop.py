@@ -240,3 +240,88 @@ def test_cli_dispatch_status_codes_and_usage():
             except SystemExit as exc:
                 code = exc.code
             assert code == 2, "usage error was accepted: %r" % args
+
+
+def test_parse_output_records_probe_appbar_and_errors():
+    output = "\n".join([
+        "[awt-desktop] probe class=Progman title=Program Manager",
+        "[awt-desktop] probe end shell_tray_conflict=0",
+        "[awt-desktop] shell_class_emulation=1 class=Shell_TrayWnd",
+        "[awt-desktop] appbar ABM_NEW returned=1",
+        "[awt-desktop] error RegisterClassExW fallback err=1410",
+        "[awt-desktop] unhandled-exception code=0xc0000005 address=0x1",
+        "[awt-desktop] action create id=alpha title=Alpha ok=1",
+    ])
+    parsed = desktop.parse_desktop_output(output, "")
+    assert parsed["shell_class_emulation"] == 1
+    assert len(parsed["probe"]) == 1 and parsed["probe"][0]["class"] == "Progman"
+    assert any("ABM_NEW" in line for line in parsed["appbar"])
+    assert any("RegisterClassExW" in e for e in parsed["errors"])
+    assertion = desktop.evaluate_assertions(
+        [{"id": "no_crash", "kind": "no_crash"}], parsed, None)
+    assert assertion[0]["passed"] is False
+
+
+def test_taskbar_compat_scenario_is_not_an_accent_assertion():
+    scenario = desktop.SCENARIOS["taskbar-compat"]
+    assert scenario["profile"] == "win10"
+    assert [a["id"] for a in scenario["assertions"]].count("accent_visible") == 0
+    assert any(a["kind"] == "no_crash" for a in scenario["assertions"])
+    assert desktop.validate_actions(scenario["actions"])
+
+
+def test_profile_is_reported_and_passed_to_the_host():
+    with temporary() as td, ExitStack() as stack, \
+         patch.object(desktop.builder, "build", side_effect=fake_build), \
+         patch.object(desktop.builder, "build_desktop",
+                      side_effect=lambda sandbox=None: fake_desktop_exe(td)), \
+         patch.object(desktop.preview, "display_session", return_value=nullcontext(":345")), \
+         patch.object(desktop.preview, "_command") as run:
+        enter_ready(stack, td)
+        def command(cmd, environment, log, limit):
+            if "--capture" in cmd:
+                assert cmd[cmd.index("--profile") + 1] == "basic"
+                Path(log).write_text(
+                    "[awt-host] init returned 1\n"
+                    "[awt-desktop] action create id=alpha title=Alpha ok=1\n"
+                    "[awt-desktop] action create id=beta title=Beta ok=1\n"
+                    "[awt-desktop] action click id=alpha target=notice before=0 after=1 ok=1\n"
+                    "[awt-desktop] action minimize id=beta minimized=1 ok=1\n"
+                    "[awt-desktop] action close id=beta closed=1 ok=1\n"
+                    "[awt-desktop] capture written\n")
+                (Path(log).parent / "capture.bmp").write_bytes(
+                    bmp(accent=True, notice=True))
+            return 0, False
+        run.side_effect = command
+        result = desktop.generate(EXAMPLE, profile="basic")
+        assert result["profile"] == "basic"
+        assert result["status"] == "passed", result.get("reason")
+        assert result["shell_probe"] == [] and result["appbar"] == []
+
+
+def test_describe_mod_source_is_bounded_and_heuristic():
+    with temporary() as temp:
+        source = Path(temp) / "sample.wh.cpp"
+        source.write_text(
+            "// SetFunctionHook mentioned only in a comment\n"
+            "WindhawkUtils::HookSymbols(module, hooks, 1);\n"
+            "#include <faked.dll>\n", encoding="utf-8")
+        result = desktop.describe_mod_source(source)
+    assert len(result["internal_hooks"]) <= 12
+    assert len(result["internal_modules"]) <= 12
+    assert "Not evidence" in result["note"]
+
+
+def test_mod_analysis_is_written_when_prerequisites_are_absent():
+    with temporary() as temp, ExitStack() as stack, \
+         patch.object(desktop, "missing_prerequisites",
+                      return_value=["Wine (absent in this sandbox)"]):
+        source = Path(temp) / "sample.wh.cpp"
+        source.write_text("WindhawkUtils::HookSymbols(module, hooks, 1);\n", encoding="utf-8")
+        stack.enter_context(patch.object(desktop, "ROOT", Path(temp)))
+        result = desktop.generate(source)
+    assert result["status"] == "not_executed"
+    assert result["mod_analysis"]["internal_hooks"]
+    assert any("internal-symbols:" in x
+               for x in result["verification"]["not_verifiable_here"])
+    assert not result["artifacts"]
