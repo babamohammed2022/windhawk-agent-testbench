@@ -27,6 +27,13 @@ def main():
             if result["status"] == "not_executed":
                 print("SKIPPED visual acceptance: " + result["reason"])
                 return 3
+            if result["status"] != "captured":
+                for phase in ("before", "after"):
+                    for name in ("prefix.log", "xvfb.log", "cleanup.log", "host.log"):
+                        path = Path(result["output"]) / phase / name
+                        if path.is_file():
+                            print("--- %s/%s (tail) ---" % (phase, name))
+                            print(path.read_text(encoding="utf-8", errors="replace")[-4000:])
             assert result["status"] == "captured", result.get("reason")
             left = png.read(result["phases"]["before"]["capture"])
             right = png.read(result["phases"]["after"]["capture"])

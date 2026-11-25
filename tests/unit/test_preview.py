@@ -286,3 +286,49 @@ def test_display_startup_failure_is_cleaned_up():
         except RuntimeError as exc:
             assert "startup" in str(exc)
         stop.assert_called_once_with(popen.return_value)
+
+
+def test_failed_cleanup_is_not_a_successful_capture():
+    with temporary() as td:
+        directory = Path(td) / "phase"
+        def command(cmd, environment, log, limit):
+            if "--capture" in cmd:
+                Path(log).write_text("[awt-preview] capture written")
+                (directory / "capture.bmp").write_bytes(bmp())
+            return (1, False) if cmd == ["wineserver", "-k"] else (0, False)
+        with patch.object(preview, "display_session", return_value=nullcontext(":345")), \
+             patch.object(preview, "_command", side_effect=command):
+            result = preview.run_phase(directory, "exe", {"settings_json": "settings"}, False,
+                                       "wine", "wineserver", 100)
+        assert result["status"] == "run_failed" and not result["cleanup_ok"]
+        assert "cleanup" in result["reason"]
+        assert "data:image/png;base64," not in preview.render_html({"status": "run_failed", "phases": {"before": result}})
+
+
+def test_incomparable_captures_are_not_resized_into_success():
+    def different_geometry(*args):
+        phase = fake_phase(*args)
+        if phase["with_mod"]:
+            png.write(phase["capture"], png.solid(12, 16, (30, 40, 50), "RGB"))
+        return phase
+    with temporary() as td, ready(td), \
+         patch.object(preview.builder, "build", side_effect=fake_build), \
+         patch.object(preview.builder, "build_playground", side_effect=fake_exe), \
+         patch.object(preview, "run_phase", side_effect=different_geometry):
+        result = preview.generate(EXAMPLE)
+        assert result["status"] == "comparison_unavailable"
+        assert result["visual_comparison"]["overall"]["status"] == "incomparable"
+        assert "diff_map" not in result
+
+
+def test_path_traversal_metadata_is_rejected_before_artifact_creation():
+    with temporary() as td, patch.object(preview, "ROOT", Path(td)):
+        source = Path(td) / "unsafe.wh.cpp"
+        source.write_text(EXAMPLE.read_text().replace("// @id              visual-playground", "// @id              ../../escaped"))
+        try:
+            preview.generate(source)
+        except ValueError as exc:
+            assert "@id" in str(exc)
+        else:
+            raise AssertionError("path traversal metadata accepted")
+        assert not (Path(td) / ".sandbox/previews").exists()

@@ -121,6 +121,21 @@ verified hook.
   are **never committed**. A configured reference that does not exist yet reports
   `unavailable`. Details: `docs/visual-diff.md`.
 
+## 4e. Visual playground preview
+```bash
+python3 -m awt.cli preview examples/visual-playground.wh.cpp
+python3 -m awt.cli preview examples/visual-playground.wh.cpp --settings enabled=false
+```
+Open the printed `index.html` (self-contained; images embedded), read `preview.json`
+and quote `verification` and phase statuses. This is a forced Win32 specimen under
+Wine, not the mod's metadata target, Explorer or real Windhawk. Only client pixels
+are captured. `captured` means clean completion and two comparable captures, not
+that the mod works; match/mismatch is descriptive. Missing tools return exit 3 with
+no substitute screenshots. Never show generated unit-test image fixtures as real
+captures. There is no live desktop or hot reload. Do not expose the repo, prefixes
+or arbitrary execution endpoints via a preview server. Runtime acceptance:
+`python3 tests/run_preview_tests.py`; details: `docs/visual-preview.md`.
+
 ## 5. Iteration rules
 - Change one thing at a time; re-run `./run.sh`; compare with the previous report in
   `.sandbox/history/`.

@@ -71,6 +71,22 @@ jobs:
           fi
           exit $code
 
+      - name: isolated visual playground acceptance
+        id: preview
+        continue-on-error: true
+        run: |
+          set +e
+          python3 tests/run_preview_tests.py 2>&1 | tee .sandbox/logs/preview-acceptance.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "preview: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            tail -n 45 .sandbox/logs/preview-acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::preview acceptance: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          else
+            echo "::notice::real Wine playground capture, enabled/disabled accent assertions and cleanup passed"
+          fi
+          exit "$code"
+
       # The suite is allowed to fail here so that the diagnosis is always
       # published; the job still fails at the end when the suite really failed.
       - name: acceptance suite
@@ -96,9 +112,9 @@ jobs:
             # Runtime failures are not named like Python unit failures. Publish
             # the tail as readable annotations too (artifact hosts may be blocked
             # in the agent sandbox). Preserve the original suite exit code.
-            tail -n 45 .sandbox/acceptance.log | while IFS= read -r line; do
-              echo "::error::acceptance: $(printf '%s' "$line" | cut -c1-600 | sed 's/%/%25/g')"
-            done
+            # One multi-line annotation: GitHub limits errors per step, so a
+            # separate annotation for every backend-table line hides the failure.
+            tail -n 45 .sandbox/acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::acceptance tail: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
             awk '/^=== FAIL/{keep=14} keep>0{print; keep--}' .sandbox/acceptance.log \
               | head -n 40 | while IFS= read -r line; do
                 echo "::error::$(printf '%s' "$line" | cut -c1-380 | sed 's/%/%25/g')"
@@ -228,6 +244,7 @@ jobs:
           SUITE: ${{ steps.acceptance.outputs.code }}
           CONFORMANCE: ${{ steps.conformance.outputs.code }}
           VISUAL: ${{ steps.visual.outcome }}
+          PREVIEW: ${{ steps.preview.outputs.code }}
         run: |
           failed=0
           case "$SUITE" in
@@ -241,6 +258,9 @@ jobs:
           fi
           if [ -n "$CONFORMANCE" ] && [ "$CONFORMANCE" != "0" ]; then
             echo "::error::awt.conformance failed with exit code $CONFORMANCE"; failed=1
+          fi
+          if [ "$PREVIEW" != "0" ]; then
+            echo "::error::the isolated visual playground acceptance failed or did not execute (exit=$PREVIEW)"; failed=1
           fi
           if [ "$VISUAL" = "failure" ]; then
             echo "::error::the visual comparison self-check failed"; failed=1
@@ -263,6 +283,7 @@ jobs:
             .sandbox/logs/setup.log
             .sandbox/logs/conformance.log
             .sandbox/logs/visual-selfcheck.log
+            .sandbox/logs/preview-acceptance.log
             .sandbox/preview-acceptance.json
             .sandbox/previews/*/index.html
             .sandbox/previews/*/preview.json
