@@ -81,6 +81,19 @@ def main():
         "  and automatically when `Wh_ModInit` returns (host calls the shim export)",
         "- symbol lookup (`Wh_FindFirstSymbol`, `Wh_HookSymbols`) always fails in the",
         "  sandbox and is reported as `unverifiable: internal-symbols`",
+        "",
+        "## Surface outside the cached v1.7.3 headers",
+        "",
+        "The table above does not include APIs that the official headers do not",
+        "declare: `Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`,",
+        "`Wh_SetFunctionHookDirect` variants, and a configurable symbol table are",
+        "not implemented and not verified. Tool-mod process support is absent;",
+        "dynamic-select options, `Wh_Disasm` and `Wh_GetUrlContent` remain stubs.",
+        "Rationale, licensed sources and alternatives: `docs/limitations.md`.",
+        "",
+        "The engine repository `ramensoftware/windhawk` is GPL-3.0. No engine source",
+        "was copied; the headers cached in `docs/official/` (provenance in `docs/links.md`) remain the",
+        "contract for signatures.",
     ]
     out = os.path.join(REPO, "docs", "shim-status.md")
     with open(out, "w", encoding="utf-8") as f:
