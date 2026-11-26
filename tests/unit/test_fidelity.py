@@ -259,3 +259,29 @@ def test_report_attaches_fidelity_sections_without_touching_the_verdict():
     assert "capabilities" in text and "verified 0" in text
     bad = staticchecks.run_checks("BOOL Wh_ModInit() { Wh_ListValues(L\"x\"); return TRUE; }")
     assert "api.unknown" in {c["id"] for c in bad["checks"]}
+
+
+def test_new_examples_exercise_and_disclose_the_new_surfaces():
+    from awt import fidelity, staticchecks
+    array_path = os.path.join(REPO, "examples", "settings-array-demo.wh.cpp")
+    array_src = open(array_path, encoding="utf-8").read()
+    flat = metadata.parse_settings(array_src)
+    assert flat["items[0].name"] == "first" and flat["items[1].size"] == 7
+    assert metadata.parse_metadata(array_src)["localizations"]["it-IT"]["name"] == \
+        "Demo impostazioni complesse"
+    inv = fidelity.api_inventory(array_src)
+    assert any(a["name"] == "Wh_GetIntSetting" for a in inv["apis"])
+
+    tool_src = open(os.path.join(REPO, "examples", "tool-mod-demo.wh.cpp"),
+                    encoding="utf-8").read()
+    caps = fidelity.capabilities({"verdict": {"level": "not_executed"}, "run": {},
+                                  "artifacts": {}}, {}, {}, tool_src, {})
+    assert caps["items"]["tool_mod"]["status"] == "not_verifiable"
+    assert "tool_mod.not_verifiable" in {c["id"] for c in
+                                         staticchecks.run_checks(tool_src)["checks"]}
+
+    symbol_src = open(os.path.join(REPO, "examples", "symbol-lookup-demo.wh.cpp"),
+                      encoding="utf-8").read()
+    symbols = {a["name"]: a["status"] for a in fidelity.api_inventory(symbol_src)["apis"]}
+    assert symbols["Wh_FindFirstSymbol"] == "stub"
+    assert "api.stub" in {c["id"] for c in staticchecks.run_checks(symbol_src)["checks"]}
