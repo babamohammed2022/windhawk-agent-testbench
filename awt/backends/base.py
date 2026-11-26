@@ -220,6 +220,21 @@ class Backend:
         rep["mod"] = dict(rep["mod"], **_mod_identity(mod_path))
         apply_environment(rep, env, backend=self.name)
         rep["environment"] = _host_probe()
+        # Even a report that could not run can say what the source *asked for*.
+        # Every capability stays not_executed/not_verifiable: no fidelity claim
+        # is inferred from reading a file.
+        source = ""
+        try:
+            with open(mod_path, encoding="utf-8", errors="replace") as f:
+                source = f.read()
+        except (OSError, TypeError):
+            pass
+        if source:
+            from .. import analyzer as analyzer_mod
+            from .. import fidelity as fidelity_mod
+            from .. import metadata as metadata_mod
+            fidelity_mod.attach(rep, {}, metadata_mod.parse_metadata(source), source,
+                                analyzer_mod.analyze(source))
         return report_mod.attach_symbol_matrix(rep, None) or rep
 
 

@@ -3,6 +3,8 @@ import json
 import os
 import time
 
+from . import fidelity
+
 
 # Verdict levels, weakest to strongest. `not_executed` means no backend was able
 # to compile or run anything, so no claim about the mod is made at all.
@@ -12,7 +14,15 @@ LEVELS = ("not_executed", "build_failed", "load_failed", "crashed",
 
 def new_report(build_result, analysis) -> dict:
     meta = build_result["meta"]
-    return {
+    source_path = build_result.get("mod_path")
+    source = ""
+    if source_path and os.path.isfile(source_path):
+        try:
+            with open(source_path, encoding="utf-8", errors="replace") as f:
+                source = f.read()
+        except OSError:
+            source = ""
+    rep = {
         "schema": 1,
         "mod": {
             "id": build_result["mod_id"],
@@ -26,6 +36,8 @@ def new_report(build_result, analysis) -> dict:
             "warnings": build_result["warnings"],
             "effective_settings": build_result.get("settings", {}),
             "settings_override_unknown": build_result.get("settings_override_unknown", []),
+            "compiler_options": build_result.get("compiler_options") or {},
+            "toolchain": build_result.get("toolchain") or {},
         },
         "analysis": {
             "public_hooks": analysis["public_hooks"],
@@ -49,6 +61,7 @@ def new_report(build_result, analysis) -> dict:
         },
         "artifacts": {"screenshots": [], "wine_log": None, "dumps": []},
     }
+    return fidelity.attach(rep, build_result, meta, source, analysis)
 
 
 def attach_symbol_matrix(rep, section) -> dict:
@@ -133,6 +146,17 @@ def summary(rep) -> str:
         s = sc.get("summary") or {}
         lines.append("static checks  : %d check(s) -> %d error(s), %d warning(s)"
                      % (s.get("checks", 0), s.get("errors", 0), s.get("warnings", 0)))
+    caps = rep.get("capabilities") or {}
+    if caps:
+        s = caps.get("summary") or {}
+        lines.append("capabilities   : verified %d, simulated %d, not_verifiable %d, "
+                     "not_executed %d"
+                     % (s.get("verified", 0), s.get("simulated", 0),
+                        s.get("not_verifiable", 0), s.get("not_executed", 0)))
+    warnings = rep.get("fidelity_warnings") or []
+    if warnings:
+        lines.append("fidelity warns : %d (source references, not runtime claims)" %
+                     len(warnings))
     hc = rep.get("hook_coverage") or {}
     if hc:
         s = hc.get("summary") or {}

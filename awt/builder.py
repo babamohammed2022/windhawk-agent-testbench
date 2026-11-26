@@ -169,7 +169,7 @@ def build(mod_path, sandbox=None, settings_override=None):
     opts = compileroptions.classify(meta["compilerOptions"])
     std = opts["standards"][0] if opts["standards"] else "-std=c++20"
     result = {"ok": False, "errors": [], "warnings": [], "dll": None,
-              "mod_id": mod_id, "meta": meta, "settings": settings,
+              "mod_id": mod_id, "mod_path": mod_path, "meta": meta, "settings": settings,
               "settings_override_unknown": unknown_settings,
               "compiler_options": opts, "toolchain": toolchain_record(std),
               "build_dir": bdir, "toolchain_missing": []}

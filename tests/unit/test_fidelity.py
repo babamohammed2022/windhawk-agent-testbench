@@ -189,3 +189,73 @@ def test_accepted_flags_reach_the_real_compile_and_link_commands():
     assert "-DFOO=1" in compile_cmd and "-std=c++20" in compile_cmd
     assert "-lcomctl32" in link_cmd and "-luxtheme" not in link_cmd  # not in this mod
     assert not any("-fno-exceptions" in c for c in commands)
+
+
+def test_api_inventory_marks_stubs_unknown_apis_and_lifecycle_honestly():
+    from awt import fidelity
+    source = """
+BOOL WINAPI Wh_ModInit() {
+    Wh_Log(L"x");
+    Wh_Disasm(nullptr, nullptr);
+    Wh_ListValues(L"x");
+    WindhawkUtils::HookSymbols(nullptr, nullptr, 0);
+    return TRUE;
+}
+"""
+    inv = fidelity.api_inventory(source)
+    by_name = {a["name"]: a for a in inv["apis"]}
+    assert by_name["Wh_ModInit"]["status"] == "lifecycle_export"
+    assert by_name["Wh_Log"]["status"] == "shim_implemented"
+    assert by_name["Wh_Disasm"]["status"] == "stub"
+    assert by_name["Wh_ListValues"]["status"] == "unknown_api"
+    assert by_name["WindhawkUtils::HookSymbols"]["status"] == "stub"
+    assert all(a["evidence"].endswith("execution not proven") for a in inv["apis"])
+    assert {w["id"] for w in inv["warnings"]} >= {"api.unknown", "api.stub"}
+
+
+def test_capability_matrix_never_promotes_an_unexecuted_run():
+    from awt import fidelity
+    rep = {"run": {"backend": "unavailable"}, "verdict": {"level": "not_executed"},
+           "artifacts": {}}
+    caps = fidelity.capabilities(rep, {}, {}, "", {})
+    assert not any(v["status"] == "verified" for v in caps["items"].values())
+    assert caps["items"]["compile"]["status"] == "not_executed"
+    assert caps["items"]["internal_symbols"]["status"] == "not_verifiable"
+    assert caps["items"]["target_shell"]["status"] == "simulated"
+    assert caps["summary"]["not_executed"] >= 5
+
+
+def test_capability_matrix_uses_execution_evidence_when_present():
+    from awt import fidelity
+    rep = {"run": {"backend": "wine", "init_returned": True,
+                   "hooks_fired": {"CreateFileW": 3}, "mode": "self"},
+           "verdict": {"level": "public_hooks_verified"},
+           "artifacts": {"screenshots": ["capture.png"]}}
+    caps = fidelity.capabilities(rep, {"ok": True}, {}, "Wh_Log(L\"x\")", {})
+    items = caps["items"]
+    assert items["compile"]["status"] == "verified"
+    assert items["load"]["status"] == "verified"
+    assert items["public_hooks"]["status"] == "verified"
+    assert items["settings"]["status"] == "simulated"
+    assert items["persistent_storage"]["status"] == "simulated"
+    assert items["injection"]["status"] == "simulated"
+    assert items["screenshot"]["status"] == "verified"
+    assert items["internal_symbols"]["status"] == "not_verifiable"
+    assert items["unload_hook_integrity"]["status"] == "not_verifiable"
+
+
+def test_report_attaches_fidelity_sections_without_touching_the_verdict():
+    from awt import builder, report, runner, staticchecks
+    path = os.path.join(REPO, "examples", "hello-log.wh.cpp")
+    b = builder.build(path)
+    rep = report.new_report(b, __import__("awt.analyzer", fromlist=["analyze"]).analyze(
+        open(path, encoding="utf-8").read()))
+    assert rep["verdict"]["verified"] == []
+    for key in ("capabilities", "api_inventory", "fidelity_warnings", "target_selection"):
+        assert key in rep, key
+    assert rep["build"]["toolchain"]["target_arch"] == "x86-64"
+    assert rep["target_selection"]["target_kind"] == "stand-in"
+    text = report.summary(rep)
+    assert "capabilities" in text and "verified 0" in text
+    bad = staticchecks.run_checks("BOOL Wh_ModInit() { Wh_ListValues(L\"x\"); return TRUE; }")
+    assert "api.unknown" in {c["id"] for c in bad["checks"]}
