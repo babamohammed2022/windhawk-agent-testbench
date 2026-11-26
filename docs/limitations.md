@@ -179,3 +179,55 @@
     out. The pre-existing host/shim double-uninit path is not fixed by these
     additions. Batch runs share prefix/storage and are not isolated snapshots.
     See `docs/testing-roadmap.md` for the work needed before skipping Windows tests.
+
+
+## Fidelity work on 2026-11-26 (observed in this sandbox)
+
+31. **This sandbox has no Wine, MinGW or Xvfb.** `./setup.sh` exits 41 (`apt-get`
+    cannot install `wine64`), `./run.sh examples/hello-log.wh.cpp` exits 3 with
+    `not_executed`, and `./tests/run_tests.sh` exits 2 with its 18 Wine
+    acceptance checks **SKIPPED**. All new Python behaviour is covered by
+    Wine-free unit tests; no new C++ was compiled or executed here. Any C++
+    change would be unverified runtime behaviour, so the shim and the host were
+    deliberately left unchanged in this branch.
+32. **Several requested APIs are not in the cached official headers.**
+    `Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`,
+    `Wh_SetFunctionHookDirect` and its variants, and a `WH_TOOL_MOD` constant
+    do not appear in `docs/official/windhawk_api.h` / `windhawk_utils.h`
+    (v1.7.3). They are therefore **not implemented and not verified** here;
+    a call to one of them is reported as `unknown_api` by the static inventory.
+    Implementing invented signatures would be a source of false positives.
+    Verify the exact signatures in a licensed current Windhawk SDK before
+    adding them to the shim; the engine repository is GPL-3.0, so no engine
+    source was copied into this MIT-licensed repository.
+33. **No runtime symbol table.** `Wh_FindFirstSymbol` / `HookSymbols` still fail
+    on purpose. A configurable fake PDB table could let more mods run further,
+    but under Wine it would prove nothing about real symbol resolution and a
+    permissive table could produce false positives. The alternative remains the
+    offline name matrix (`python3 -m awt.symbols`) plus the explicit
+    `not_verifiable` capability. If an opt-in table is added later, it must be
+    off by default and labelled `simulated` in every report.
+34. **Flag classification is not a compiler verdict.**
+    `@compilerOptions` tokens are now split into accepted and rejected with
+    reasons, and the accepted ones really reach the compiler/linker. An
+    accepted `-l<lib>` is only resolved when a build actually succeeds; on a
+    machine without a toolchain the report says `not_executed`, never
+    "linked". The toolchain record contains only versions that answered
+    `--version`.
+35. **Nested settings are a Python-side approximation.** The settings YAML is
+    parsed into a tree and flattened into `items[0].name`-style keys, and
+    display keys are dropped. This reflects the shape of the block, not
+    Windhawk's setting types, validation, dynamic-select options or UI. The
+    capability is `simulated`, even when the run observed log values.
+36. **Stand-ins remain stand-ins.** `targets/` still contains only
+    `testapp.exe`, `trayapp.exe` and `enumwins.exe`; a shell/tooltip/menu/
+    common-dialog/COM target was not added because it could not be compiled or
+    exercised in this sandbox. `awt/targeting.py` describes the existing
+    executables as declared stand-ins and records wildcard/full-path include
+    and exclude matching statically. No report field may be read as "loaded
+    into Explorer" or "common dialog verified".
+37. **No new C++/hook lifecycle instrumentation.** Unload hook integrity, tool
+    mods, injection success, DWM/uxtheme COM surfaces and the engine's exact
+    callback ordering stay `not_verifiable` or `simulated` as recorded in
+    `capabilities`. A same-value settings callback is still a notification,
+    not a real settings reload.
