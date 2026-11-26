@@ -9,7 +9,7 @@ import json
 import re
 import sys
 
-from . import analyzer, metadata
+from . import analyzer, compileroptions, fidelity, metadata, shellsurfaces
 
 # Preserve strings while removing comments (including the metadata/settings).
 # C++ raw strings and macro expansion are not fully parsed: this is a linter.
@@ -68,6 +68,43 @@ def run_checks(source, mod_path=None):
         add("hooks.internal", "warning", "internal symbols/modules need Windows execution; a symbol matrix checks availability only")
     if not ana.get("public_hooks") and not ana.get("internal_hooks"):
         add("hooks.none", "info", "no hook call detected heuristically")
+
+    # API fidelity: an unknown name or a stub is more useful to an agent than a
+    # silent compile error. These are static observations only.
+    for api in fidelity.api_inventory(source)["apis"]:
+        if api["status"] == "unknown_api":
+            add("api.unknown", "warning", "%s is not in the cached official headers; "
+                "do not assume it exists in this shim" % api["name"])
+        elif api["status"] == "stub":
+            add("api.stub", "warning", "%s is a stub in this shim; calling it cannot "
+                "demonstrate real Windhawk behaviour" % api["name"])
+    opts = compileroptions.classify(meta.get("compilerOptions") or [])
+    for rejected in opts["rejected"]:
+        add("compiler_option.rejected", "warning", "@compilerOptions %s will not be "
+            "applied: %s" % (rejected["flag"], rejected["reason"]))
+    for name in opts["unverified_libraries"]:
+        add("library.unverified", "info", "-l%s is not in the known import-library set; "
+            "the linker result decides" % name)
+    # Long base64/hex resource lines are data, not code: a blob that happens to
+    # contain the letters "DUI" is not a DUI dependency. Keep short string
+    # literals (module names such as twinui.pcshell.dll) but skip blobs.
+    probe = "\n".join(l for l in source.splitlines() if len(l) <= 240)
+    unverifiable = (
+        ("tool_mod.not_verifiable", r"\bWH_TOOL_MOD\b", "tool mods need Windhawk's "
+         "dedicated tool process; not verifiable here"),
+        ("shell.com_private", r"I[A-Z]\w*Shell\w*|IShellItem|ITrayNotify",
+         "private shell COM interfaces are not available in this bench"),
+        ("shell.dui_xaml", r"dui\.dll|Windows\.UI\.Xaml|twinui\.pcshell\.dll",
+         "DUI/XAML shell internals are not verifiable under Wine"),
+    )
+    for cid, pattern, message in unverifiable:
+        if re.search(pattern, probe, re.I):
+            add(cid, "warning", message)
+
+    for surface in shellsurfaces.analyze(source, meta)["surfaces"]:
+        add("shell_surface." + surface["id"],
+            "warning" if surface["coverage"] == "not_verifiable" else "info",
+            "%s: %s; %s" % (surface["id"], surface["coverage"], surface["reason"]))
     errors = sum(c["severity"] == "error" for c in checks)
     warnings = sum(c["severity"] == "warning" for c in checks)
     return {

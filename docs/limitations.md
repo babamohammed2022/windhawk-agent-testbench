@@ -179,3 +179,77 @@
     out. The pre-existing host/shim double-uninit path is not fixed by these
     additions. Batch runs share prefix/storage and are not isolated snapshots.
     See `docs/testing-roadmap.md` for the work needed before skipping Windows tests.
+
+
+## Fidelity work on 2026-11-26 (observed in this sandbox)
+
+31. **This sandbox has no Wine, MinGW or Xvfb.** `./setup.sh` exits 41 (`apt-get`
+    cannot install `wine64`), `./run.sh examples/hello-log.wh.cpp` exits 3 with
+    `not_executed`, and `./tests/run_tests.sh` exits 2 with its 18 Wine
+    acceptance checks **SKIPPED**. All new Python behaviour is covered by
+    Wine-free unit tests; no new C++ was compiled or executed here. Any C++
+    change would be unverified runtime behaviour, so the shim and the host were
+    deliberately left unchanged in this branch.
+32. **Several requested APIs are not in the cached official headers.**
+    `Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`,
+    `Wh_SetFunctionHookDirect` and its variants, and a `WH_TOOL_MOD` constant
+    do not appear in `docs/official/windhawk_api.h` / `windhawk_utils.h`
+    (v1.7.3). They are therefore **not implemented and not verified** here;
+    a call to one of them is reported as `unknown_api` by the static inventory.
+    Implementing invented signatures would be a source of false positives.
+    Verify the exact signatures in a licensed current Windhawk SDK before
+    adding them to the shim; the engine repository is GPL-3.0, so no engine
+    source was copied into this MIT-licensed repository.
+33. **No runtime symbol table.** `Wh_FindFirstSymbol` / `HookSymbols` still fail
+    on purpose. A configurable fake PDB table could let more mods run further,
+    but under Wine it would prove nothing about real symbol resolution and a
+    permissive table could produce false positives. The alternative remains the
+    offline name matrix (`python3 -m awt.symbols`) plus the explicit
+    `not_verifiable` capability. If an opt-in table is added later, it must be
+    off by default and labelled `simulated` in every report.
+34. **Flag classification is not a compiler verdict.**
+    `@compilerOptions` tokens are now split into accepted and rejected with
+    reasons, and the accepted ones really reach the compiler/linker. An
+    accepted `-l<lib>` is only resolved when a build actually succeeds; on a
+    machine without a toolchain the report says `not_executed`, never
+    "linked". The toolchain record contains only versions that answered
+    `--version`.
+35. **Nested settings are a Python-side approximation.** The settings YAML is
+    parsed into a tree and flattened into `items[0].name`-style keys, and
+    display keys are dropped. This reflects the shape of the block, not
+    Windhawk's setting types, validation, dynamic-select options or UI. The
+    capability is `simulated`, even when the run observed log values.
+36. **Stand-ins remain stand-ins.** `targets/` still contains only
+    `testapp.exe`, `trayapp.exe` and `enumwins.exe`; a shell/tooltip/menu/
+    common-dialog/COM target was not added because it could not be compiled or
+    exercised in this sandbox. `awt/targeting.py` describes the existing
+    executables as declared stand-ins and records wildcard/full-path include
+    and exclude matching statically. No report field may be read as "loaded
+    into Explorer" or "common dialog verified".
+37. **No new C++/hook lifecycle instrumentation.** Unload hook integrity, tool
+    mods, injection success, DWM/uxtheme COM surfaces and the engine's exact
+    callback ordering stay `not_verifiable` or `simulated` as recorded in
+    `capabilities`. A same-value settings callback is still a notification,
+    not a real settings reload.
+
+38. **Observations from real shell-recreation mods (2026-11-26).** Three
+    user-supplied mods from `babamohammed2022`'s public repositories were read
+    in this sandbox (a Start-menu mod, a classic-taskbar-menu mod and the
+    Windows 7 network flyout recreation) to check the parsers. None was copied
+    into this repository or compiled here; they remain under their own
+    licences. Their metadata, compiler options and settings parse, but the
+    bench still cannot demonstrate Start-menu XAML hooks, taskbar behaviour,
+    WLAN/network-list COM objects, or undocumented `dui.dll` ordinals. Those
+    surfaces are reported as `not_verifiable` with a verification plan.
+39. **Static surface detection is not execution.** `awt/shellsurfaces.py`
+    matches source text, including short string literals such as
+    `L"Shell_TrayWnd"`; long resource lines are skipped to avoid false hits.
+    A detected surface means the mod *references* it, not that a hook worked.
+
+40. **The shim's unload path is not the engine's.** The official wiki documents
+    that Windhawk calls `Wh_ModBeforeUninit` → hook removal → `Wh_ModUninit` on
+    an explicit mod unload, but does **not** call those callbacks when the host
+    process exits (only global destructors run, under the loader lock). This
+    bench's `DllMain` invokes both callbacks on `DLL_PROCESS_DETACH`, so a
+    "clean exit" observed here is not evidence about that Windhawk path. The
+    source-based overview is `docs/how-windhawk-works.md`.

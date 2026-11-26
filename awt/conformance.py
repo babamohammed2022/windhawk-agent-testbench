@@ -81,10 +81,34 @@ def main():
         "  and automatically when `Wh_ModInit` returns (host calls the shim export)",
         "- symbol lookup (`Wh_FindFirstSymbol`, `Wh_HookSymbols`) always fails in the",
         "  sandbox and is reported as `unverifiable: internal-symbols`",
+        "",
+        "## Surface outside the cached v1.7.3 headers",
+        "",
+        "The table above does not include APIs that the official headers do not",
+        "declare: `Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`,",
+        "`Wh_SetFunctionHookDirect` variants, and a configurable symbol table are",
+        "not implemented and not verified. Tool-mod process support is absent;",
+        "dynamic-select options, `Wh_Disasm` and `Wh_GetUrlContent` remain stubs.",
+        "Rationale, licensed sources and alternatives: `docs/limitations.md`.",
+        "",
+        "The engine repository `ramensoftware/windhawk` is GPL-3.0. No engine source",
+        "was copied; the headers cached in `docs/official/` (provenance in `docs/links.md`) remain the",
+        "contract for signatures.",
     ]
     out = os.path.join(REPO, "docs", "shim-status.md")
-    with open(out, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    text = "\n".join(lines) + "\n"
+    # Do not dirty the tree with a timestamp-only change: the table is the
+    # checked-in record, the clock is not evidence about the shim.
+    if os.path.exists(out):
+        previous = open(out, encoding="utf-8").read()
+        blank = lambda s: re.sub(r"^Last check: .*$", "Last check: <time>",
+                                 s, flags=re.M)
+        if blank(previous) == blank(text):
+            text = previous
+    current = open(out, encoding="utf-8").read() if os.path.exists(out) else None
+    if text != current:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(text)
     print("conformance: %d implemented, %d stub, %d missing" % (len(impl), len(stubs), len(missing)))
     if missing:
         print("MISSING:", ", ".join(missing))

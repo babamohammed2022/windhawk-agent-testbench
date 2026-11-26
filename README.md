@@ -64,6 +64,63 @@ JUnit. Exit codes: **0** execution outcomes positive, **1** failure/unknown/time
 CI failures and requires confirmed init plus a zero exit code for positive levels.
 Intentional failures in `examples/` are not a green regression suite.
 
+## Fidelity-oriented report (additive v1)
+
+Every execution report now carries four extra, **descriptive** sections next to
+the unchanged `verdict.level`:
+
+- `capabilities.items` — one entry per capability (`compile`, `load`,
+  `public_hooks`, `internal_symbols`, `settings`, `persistent_storage`,
+  `target_shell`, `injection`, `tool_mod`, `disassembly`, `url_fetch`,
+  `dynamic_select`, `unload_hook_integrity`, `screenshot`), each with a status
+  and the evidence behind it: `verified` (executed here), `simulated`
+  (emulated by this bench), `not_verifiable` (needs real Windhawk/Windows),
+  `not_executed`, `failed` or `not_applicable`;
+- `api_inventory.apis` — every `Wh_*` / `WindhawkUtils::*` call visible in the
+  source, with its status against the cached official headers and the shim;
+  unknown names and stubs are also listed in `fidelity_warnings`;
+- `target_selection` — `@include` / `@exclude` matching and the declared
+  stand-in, separate from the runtime target/fallback in `include_analysis`;
+- `build.toolchain` and `build.compiler_options` — the compiler versions that
+  actually answered `--version`, effective `-std=`, accepted/rejected
+  `@compilerOptions`, libraries and flagged unknowns.
+
+```bash
+python3 -m awt.cli check examples/settings-array-demo.wh.cpp
+python3 -m awt.cli run examples/hook-createfilew.wh.cpp
+python3 -c 'import json; r=json.load(open(".sandbox/report.json")); print(r["capabilities"]["summary"])'
+```
+
+These sections never promote a simulation to a pass and never downgrade or
+upgrade `verdict.level`. A `verified` capability means this bench executed
+something that demonstrated it; it never means "works on Windows". See
+[`docs/fidelity-gap.md`](docs/fidelity-gap.md) for the observed comparison and
+[`docs/limitations.md`](docs/limitations.md) for what stays out of reach.
+
+## Shell-recreation mods: what the bench can and cannot show
+
+For mods that recreate a Start menu, taskbar, network flyout or classic dialog,
+`run` now adds `shell_surfaces`: detected Win32/UI surfaces, the stand-in (if
+any) and whether the observation would be `simulated` or `not_verifiable`. It
+also provides a short `verification_plan` of checks to run on real Windows.
+
+```bash
+python3 -m awt.cli run /path/to/shell-recreation.wh.cpp
+python3 -c 'import json; r=json.load(open(".sandbox/report.json")); \
+print([(s["id"], s["coverage"]) for s in r["shell_surfaces"]["surfaces"]]); \
+print(r["shell_surfaces"]["verification_plan"])'
+```
+
+A `start_menu`, `network_shell`, `common_dialogs`, `dark_mode_undocumented` or
+`resources_download` surface has no faithful stand-in here: the report says
+`not_verifiable` and the agent should stop and list the remaining Windows
+checks instead of calling the mod good. `taskbar`, `tray_icon`, `menus`, `dwm`
+and `control_panel` can be *observed* only through declared stand-ins and stay
+`simulated`. The human summary prints `real Windows: unknown` for any report
+where nothing was executed; it never implies that a shell mod needs no Windows
+verification. Third-party mods may be GPL-3.0: this repository never vendors
+their source, only the static analysis code that reads a user-supplied file.
+
 ## PR readiness — replay Windhawk's PR validators (offline)
 
 Before submitting a mod to `ramensoftware/windhawk-mods`, replay the checks that
@@ -220,7 +277,7 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 - `targets/` — `testapp.exe` (generic Win32 hook target), `trayapp.exe` (tray client),
   `enumwins.exe` (window-class probe).
 - `examples/`, `tests/shim_conformance/` — mods used as acceptance tests.
-- `docs/` — `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
+- `docs/` — `how-windhawk-works.md` (spiegazione introduttiva, in italiano, con fonti ufficiali), `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
   `backends.md`, `vm-protocol.md`, `reference-vms.md`, `visual-diff.md`, official
   headers cache.
 - `host/desktop.cpp`, `awt/desktop.py` — scripted simulated desktop: windows, taskbar, notification area, input messages, capture and assertions.
@@ -244,4 +301,4 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 5. mod initialised, hooks applied, target driven so hooks fire, teardown, logs and
    optional screenshots collected into `.sandbox/report.json`.
 
-See `AGENTS.md` for agent workflow and `docs/limitations.md` for what Wine cannot do.
+See `AGENTS.md` for agent workflow, `docs/limitations.md` for what Wine cannot do, and `docs/how-windhawk-works.md` for a source-based explanation of real Windhawk (in Italian).

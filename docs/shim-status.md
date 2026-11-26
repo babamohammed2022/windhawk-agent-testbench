@@ -4,7 +4,7 @@ Conformance of `shim/shim.cpp` against the official headers cached in
 `docs/official/` (windhawk_api.h + windhawk_api_internal.h, Windhawk v1.7.3
 distribution headers; engine-side mods_api.h kept for reference).
 
-Last check: 2026-11-04 13:45 UTC
+Last check: 2026-11-26 15:48 UTC
 
 Signature mismatches: **0 by construction** — the shim is compiled including the
 official `windhawk_api_internal.h`, so a wrong signature cannot build.
@@ -46,3 +46,16 @@ Behavioural notes (assumed where the docs are silent, see AGENTS.md):
   and automatically when `Wh_ModInit` returns (host calls the shim export)
 - symbol lookup (`Wh_FindFirstSymbol`, `Wh_HookSymbols`) always fails in the
   sandbox and is reported as `unverifiable: internal-symbols`
+
+## Surface outside the cached v1.7.3 headers
+
+The table above does not include APIs that the official headers do not
+declare: `Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`,
+`Wh_SetFunctionHookDirect` variants, and a configurable symbol table are
+not implemented and not verified. Tool-mod process support is absent;
+dynamic-select options, `Wh_Disasm` and `Wh_GetUrlContent` remain stubs.
+Rationale, licensed sources and alternatives: `docs/limitations.md`.
+
+The engine repository `ramensoftware/windhawk` is GPL-3.0. No engine source
+was copied; the headers cached in `docs/official/` (provenance in `docs/links.md`) remain the
+contract for signatures.
