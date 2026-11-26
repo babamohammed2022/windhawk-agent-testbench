@@ -256,7 +256,11 @@ def test_report_attaches_fidelity_sections_without_touching_the_verdict():
     assert rep["build"]["toolchain"]["target_arch"] == "x86-64"
     assert rep["target_selection"]["target_kind"] == "stand-in"
     text = report.summary(rep)
-    assert "capabilities" in text and "verified 0" in text
+    # On a machine with a real toolchain the build is verified; on a machine
+    # without one it is not. Assert the summary against the matrix it reports,
+    # never against an assumed environment.
+    expected = rep["capabilities"]["summary"].get("verified", 0)
+    assert "capabilities" in text and "verified %d" % expected in text
     bad = staticchecks.run_checks("BOOL Wh_ModInit() { Wh_ListValues(L\"x\"); return TRUE; }")
     assert "api.unknown" in {c["id"] for c in bad["checks"]}
 
@@ -374,3 +378,14 @@ def test_shell_behaviour_capability_and_summary_never_claim_success():
     text = report.summary(rep)
     assert "real Windows   : unknown (nothing was executed here)" in text
     assert "shell surfaces :" in text
+
+
+def test_summary_capability_count_follows_the_matrix_not_the_machine():
+    from awt import report
+    fake_build = {"ok": True, "mod_id": "x", "mod_path": None,
+                  "meta": {"raw": {}, "include": []}, "errors": [], "warnings": [],
+                  "settings": {}}
+    rep = report.new_report(fake_build,
+                            {"public_hooks": [], "internal_hooks": [], "unknown_hooks": []})
+    assert rep["capabilities"]["items"]["compile"]["status"] == "verified"
+    assert "verified 1" in report.summary(rep)
