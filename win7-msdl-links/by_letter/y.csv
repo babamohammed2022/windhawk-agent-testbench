@@ -1,0 +1,5 @@
+name,version,size,sha256,url,source
+ypcat.exe,6.1.7601.17514,159232,69404bf9c67e70e6bcfa8f5baacbd274e304019fa7e52ed939c6b922e6a513a0,https://msdl.microsoft.com/download/symbols/ypcat.exe/4CE798C42b000/ypcat.exe,SP1 (KB976932)
+ypclear.exe,6.1.7601.17514,152064,7c4870cd147bc2a114594a774c40fe274e273ee5dbf2d8fd592aa7e9a6141099,https://msdl.microsoft.com/download/symbols/ypclear.exe/4CE798C329000/ypclear.exe,SP1 (KB976932)
+ypmatch.exe,6.1.7601.17514,158208,b216c5fba44ed3dd77c705ebf9e7c87958951091354e43723d23c73d73070827,https://msdl.microsoft.com/download/symbols/ypmatch.exe/4CE798C42b000/ypmatch.exe,SP1 (KB976932)
+yppush.exe,6.1.7601.17514,165888,67f38ac43a28337817d9e883f2b57ced4694e142dd3ff774a7ebd28962df5584,https://msdl.microsoft.com/download/symbols/yppush.exe/4CE798C42d000/yppush.exe,SP1 (KB976932)
