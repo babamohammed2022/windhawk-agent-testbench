@@ -150,7 +150,7 @@ def parse_desktop_output(output, mod_log=""):
             continue
         text = match.group("text")
         if text == "capture written":
-            markers.append({"capture": True})
+            markers.append({"capture": True, "raw": line})
             continue
         if not text.startswith("action "):
             continue

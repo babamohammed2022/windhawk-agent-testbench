@@ -453,7 +453,7 @@ static bool InjectKey(UINT vk) {
     if (!vk) return false;
     INPUT input = {};
     input.type = INPUT_KEYBOARD;
-    input.wVk = (WORD)vk;
+    input.ki.wVk = (WORD)vk;
     if (SendInput(1, &input, sizeof(input)) != 1) return false;
     input.ki.dwFlags = KEYEVENTF_KEYUP;
     return SendInput(1, &input, sizeof(input)) == 1;
@@ -520,9 +520,19 @@ static bool ApplyAction(const std::vector<std::wstring>& tokens) {
             SendMessageW(item->hwnd, WM_KEYUP, vk, 0);
         }
         RedrawScene();
-        printf("[awt-desktop] action %ls id=%ls minimized=%d closed=%d ok=1\n",
-               action.c_str(), item->id.c_str(), item->minimized ? 1 : 0,
-               item->closed ? 1 : 0);
+        // Canonical markers consumed by the scenario assertions: keep the
+        // minimize/close spelling stable, with the state field they check.
+        if (action == L"minimize") {
+            printf("[awt-desktop] action minimize id=%ls minimized=%d ok=1\n",
+                   item->id.c_str(), item->minimized ? 1 : 0);
+        } else if (action == L"close") {
+            printf("[awt-desktop] action close id=%ls closed=%d ok=1\n",
+                   item->id.c_str(), item->closed ? 1 : 0);
+        } else {
+            printf("[awt-desktop] action %ls id=%ls minimized=%d closed=%d ok=1\n",
+                   action.c_str(), item->id.c_str(), item->minimized ? 1 : 0,
+                   item->closed ? 1 : 0);
+        }
         fflush(stdout);
         return true;
     }
@@ -562,6 +572,35 @@ static bool ApplyAction(const std::vector<std::wstring>& tokens) {
     return false;
 }
 
+// The action language uses single-quoted arguments (e.g. a window title with
+// spaces). Split on whitespace outside quotes so the exact heading reaches
+// DrawTextW; a plain >> token stream would truncate it.
+static std::vector<std::wstring> TokenizeAction(const std::wstring& text) {
+    std::vector<std::wstring> tokens;
+    std::wstring current;
+    wchar_t quote = 0;
+    bool started = false;
+    auto space = [](wchar_t c) {
+        return c == L' ' || c == L'\t' || c == L'\r' || c == L'\n';
+    };
+    for (wchar_t c : text) {
+        if (quote) {
+            if (c == quote) quote = 0;
+            else current += c;
+        } else if (c == L'\'' || c == L'"') {
+            quote = c;
+            started = true;
+        } else if (space(c)) {
+            if (started) { tokens.push_back(current); current.clear(); started = false; }
+        } else {
+            current += c;
+            started = true;
+        }
+    }
+    if (started) tokens.push_back(current);
+    return tokens;
+}
+
 static bool RunScript(const wchar_t* path) {
     FILE* file = _wfopen(path, L"r");
     if (!file) {
@@ -575,10 +614,7 @@ static bool RunScript(const wchar_t* path) {
         std::wstring text(line);
         size_t comment = text.find(L'#');
         if (comment != std::wstring::npos) text.erase(comment);
-        std::wistringstream stream(text);
-        std::vector<std::wstring> tokens;
-        std::wstring token;
-        while (stream >> token) tokens.push_back(token);
+        std::vector<std::wstring> tokens = TokenizeAction(text);
         if (tokens.empty()) continue;
         if (!ApplyAction(tokens)) ok = false;
     }
@@ -695,6 +731,13 @@ int wmain(int argc, wchar_t** argv) {
     RegisterAppBar();
     ShowWindow(g_surface, SW_SHOWNOACTIVATE);
     UpdateWindow(g_surface);
+
+    // A second, real EnumWindows pass over the created scene. The first probe
+    // runs before any window exists, so on a bare Xvfb display it can honestly
+    // enumerate nothing; record the visible windows of THIS process too.
+    Mark("probe scene begin");
+    EnumWindows(ProbeWindow, 0);
+    Mark("probe scene end");
 
     bool script_ok = RunScript(script_path);
     if (!script_ok) {
