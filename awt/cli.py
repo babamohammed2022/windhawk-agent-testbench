@@ -6,6 +6,7 @@
                                         [--settings-json file.json] [--settings k=v ...]
     python3 -m awt.cli check <mod.wh.cpp> [--json out.json]   (static checks, no execution)
     python3 -m awt.cli batch <dir|mod...> [--seconds N] [--backend ...] [--json ...] [--junit ...]
+    python3 -m awt.cli desktop <mod.wh.cpp>                       (scripted Wine desktop lab)
     python3 -m awt.cli symbols <mod.wh.cpp> [--matrix file.yaml]   (== python3 -m awt.symbols)
     python3 -m awt.cli backends [--list-json]                     (== python3 -m awt.backends)
 
@@ -51,6 +52,9 @@ def main(argv=None):
     if argv and argv[0] == "preview":
         from . import preview
         return preview.main(argv[1:])
+    if argv and argv[0] == "desktop":
+        from . import desktop
+        return desktop.main(argv[1:])
     if argv and argv[0] == "backends":
         # handled before argparse: `awt.cli backends --list-json` starts with an
         # option, which nargs=REMAINDER does not capture reliably.

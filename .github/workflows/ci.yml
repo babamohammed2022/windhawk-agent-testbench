@@ -27,6 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Python dependency for the PR validation replay
+        # The unit suite skips the PR gate tests without PyYAML; install it so
+        # the skip can never hide a broken replay on CI.
+        run: python3 -m pip install pyyaml
+
       - name: start a diagnosis log
         run: |
           mkdir -p .sandbox/logs
@@ -88,6 +93,25 @@ jobs:
             tail -n 45 .sandbox/logs/preview-acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::preview acceptance: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           else
             echo "::notice::real Wine playground capture, enabled/disabled accent assertions and cleanup passed"
+          fi
+          exit "$code"
+
+      # The simulated desktop is a separate, additive runtime stage; its own
+      # report says which actions, pixels and cleanups were really observed.
+      - name: simulated desktop acceptance
+        id: desktop
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 tests/run_desktop_tests.py 2>&1 | tee .sandbox/logs/desktop-acceptance.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "desktop: exit=$code" >> .sandbox/steps.log
+          if [ "$code" != "0" ]; then
+            tail -n 45 .sandbox/logs/desktop-acceptance.log | python3 -c 'import sys; text=sys.stdin.read()[-12000:]; print("::error::desktop acceptance: " + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          else
+            echo "::notice::simulated desktop: scripted windows, click, capture, assertions and cleanup passed"
           fi
           exit "$code"
 
@@ -187,6 +211,27 @@ jobs:
             echo "::notice::visual comparison self-check: $(grep -c . .sandbox/logs/visual-selfcheck.log) lines, exit 0"
           fi
 
+      # Advisory, but required to execute: an unavailable replay is not a pass.
+      - name: Windhawk PR validation replay
+        id: prgate
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 -m awt.prgate tests/fixtures/prgate/new-mod.wh.cpp \
+            --author awt-prgate-fixture --author-id 1234567 \
+            --pr-body tests/fixtures/prgate/new-pr-body.md \
+            --json .sandbox/prgate-report.json
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "prgate: exit=$code" >> .sandbox/steps.log
+          if [ "$code" = "0" ]; then
+            echo "::notice::PR gate self-test: $(python3 -c 'import json; print(json.load(open(".sandbox/prgate-report.json"))["verdict"]["submission_readiness"])')"
+          else
+            echo "::error::PR gate self-test failed with exit code $code (see .sandbox/prgate-report.json)"
+          fi
+          exit "$code"
+
       - name: publish an honest step summary
         if: always()
         run: |
@@ -198,6 +243,8 @@ jobs:
             echo "| setup.sh | \`${{ steps.setup.outputs.code }}\` | toolchain install |"
             echo "| tests/run_tests.sh | \`${{ steps.acceptance.outputs.code }}\` | 0 = passed, 1 = failed, 2 = stage 2 honestly skipped |"
             echo "| awt.conformance | \`${{ steps.conformance.outputs.code }}\` | shim conformance table |"
+            echo "| PR validation replay | \`${{ steps.prgate.outputs.code }}\` | 0 = no local blockers, 1 = blocked/review, 3 = unavailable |"
+            echo "| simulated desktop | \`${{ steps.desktop.outputs.code }}\` | 0 = assertions passed, 3 = prerequisites unavailable |"
             echo
             if [ -f .sandbox/acceptance.log ]; then
               echo '### failures and skips'
@@ -249,6 +296,8 @@ jobs:
           CONFORMANCE: ${{ steps.conformance.outputs.code }}
           VISUAL: ${{ steps.visual.outcome }}
           PREVIEW: ${{ steps.preview.outputs.code }}
+          PRGATE: ${{ steps.prgate.outputs.code }}
+          DESKTOP: ${{ steps.desktop.outputs.code }}
         run: |
           failed=0
           case "$SUITE" in
@@ -268,6 +317,12 @@ jobs:
           fi
           if [ "$VISUAL" = "failure" ]; then
             echo "::error::the visual comparison self-check failed"; failed=1
+          fi
+          if [ -n "$PRGATE" ] && [ "$PRGATE" != "0" ]; then
+            echo "::error::the Windhawk PR validation replay failed or was unavailable (exit $PRGATE)"; failed=1
+          fi
+          if [ -n "$DESKTOP" ] && [ "$DESKTOP" != "0" ]; then
+            echo "::error::the simulated desktop acceptance failed or could not execute (exit $DESKTOP)"; failed=1
           fi
           if [ "$failed" != "0" ]; then
             echo "--- .sandbox/steps.log ---"; cat .sandbox/steps.log 2>/dev/null || true
@@ -289,6 +344,17 @@ jobs:
             .sandbox/logs/visual-selfcheck.log
             .sandbox/logs/preview-acceptance.log
             .sandbox/preview-acceptance.json
+            .sandbox/prgate-report.json
+            .sandbox/desktop-acceptance.json
+            .sandbox/logs/desktop-acceptance.log
+            .sandbox/desktop/*/report.json
+            .sandbox/desktop/*/host.log
+            .sandbox/desktop/*/mod.log
+            .sandbox/desktop/*/stubs.log
+            .sandbox/desktop/*/xvfb.log
+            .sandbox/desktop/*/cleanup.log
+            .sandbox/desktop/*/actions.txt
+            .sandbox/desktop/*/capture.png
             .sandbox/previews/*/index.html
             .sandbox/previews/*/preview.json
             .sandbox/previews/*/difference.png

@@ -148,7 +148,30 @@
     deadlock. These sections never change the legacy verdict level; in particular
     that level alone still does not reliably express timeouts. Batch CI separately
     fails explicit timeouts/crashes in runtime data.
-28. **Overrides and lifecycle are not a complete reload test.** Overrides support
+28. **The simulated desktop is not a shell (implementation added 2026-11-25).**
+    `host/desktop.cpp` is an original Win32 scene with custom-drawn windows,
+    taskbar and notification area; it is deliberately named `awt-desktop.exe`,
+    never `explorer.exe`. In the Win10 profile it may register a synthetic child
+    class named `Shell_TrayWnd` inside its own process; this is not Explorer or a
+    shell replacement. The scripted
+    clicks/keys in the default scenario are synthetic `WM_*` messages; the
+    `SendInput` commands only report what the API returned. The scene was **not
+    compiled or executed in the development sandbox** (no Wine/MinGW/Xvfb), so
+    its runtime acceptance is `not_executed` here. Its report is additive: it
+    never upgrades the legacy verdict level and never asserts real Windows or
+    Windhawk-engine behaviour.
+29. **The Win10-like surface is drawn, not integrated.** The Start/search strip,
+    task buttons, tray and notification are ordinary GDI pixels in
+    `awt-desktop.exe`. `SHAppBarMessage`, `SPI_GETWORKAREA` and `EnumWindows`
+    are called through public APIs, but their results only describe that
+    process; no shell, Explorer or system taskbar is replaced. A synthetic
+    `Shell_TrayWnd` class name (only when no such window is already visible) is
+    an approximation for black-box experiments, not shell compatibility.
+    `win81-taskbar-recreation` targets Explorer, downloads resources at runtime
+    and uses symbol hooks: this lab can observe build/init refusals and log
+    errors, but cannot verify its functionality here. Build/init success is not
+    proof that the mod works on Windows.
+30. **Overrides and lifecycle are not a complete reload test.** Overrides support
     flat integer/boolean/string values; the minimal shim does not decode JSON
     escapes, so overrides requiring those are refused. The VM backend explicitly
     refuses overrides until the guest protocol supports them. A settings callback

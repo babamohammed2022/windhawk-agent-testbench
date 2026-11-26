@@ -261,6 +261,20 @@ def build_host():
     return host
 
 
+def build_desktop(sandbox=None):
+    """Compile the scripted desktop scene into a caller-owned build directory."""
+    sandbox = sandbox or os.path.join(REPO, ".sandbox")
+    output = os.path.join(sandbox, "build", "awt-desktop.exe")
+    os.makedirs(os.path.dirname(output), exist_ok=True)
+    src = os.path.join(REPO, "host", "desktop.cpp")
+    p = _run([CC, "-std=c++20", "-O1", "-DUNICODE", "-D_UNICODE", "-municode",
+              "-o", output, src, "-lkernel32", "-luser32", "-lgdi32", "-lshell32",
+              "-static-libgcc", "-static-libstdc++"])
+    if p.returncode != 0 or not os.path.isfile(output):
+        raise RuntimeError("desktop scene build failed: " + p.stderr[:4000])
+    return output
+
+
 def build_playground(sandbox=None):
     """Compile the visual specimen in a caller-owned build directory."""
     sandbox = sandbox or os.path.join(REPO, ".sandbox")
