@@ -1,0 +1,4 @@
+name,version,size,sha256,url,source
+ypcat.exe,6.3.9600.18470,158208,1a5b72470de8ecd6d7421310ad4dec75b1fbf0873a24f4c80e29816cf51773b9,https://msdl.microsoft.com/download/symbols/ypcat.exe/57CB15B62c000/ypcat.exe,KB5022352 (Win8.1 Jan 2023 Rollup)
+ypmatch.exe,6.3.9600.18470,157696,eae3e2c362f541f019f1bf5d3d073cb89722843fdd73857188dae44806403fc3,https://msdl.microsoft.com/download/symbols/ypmatch.exe/57CB15B72b000/ypmatch.exe,KB5022352 (Win8.1 Jan 2023 Rollup)
+yppush.exe,6.3.9600.18470,167936,466f465cd4b2c30ea6158b203b7dfed9f3623db9404583429436a1343c777a88,https://msdl.microsoft.com/download/symbols/yppush.exe/57CB15B72e000/yppush.exe,KB5022352 (Win8.1 Jan 2023 Rollup)

@@ -1,0 +1,19 @@
+# Windows 8.0 x64 (6.2.9200) — Themes & UI (15 files)
+
+| File | Version | Size (bytes) | SHA-256 | Microsoft Symbol Server URL | Source |
+|---|---|---|---|---|---|
+| `comctl32.dll` | `6.0.9200.22792` | 2512384 | `26d6906d8057b9a07d738c5ee793f0ae03f35b893c1f6943d585242a6d3eaf93` | https://msdl.microsoft.com/download/symbols/comctl32.dll/5CF68488269000/comctl32.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `cryptui.dll` | `6.2.9200.22903` | 588800 | `2a8c82bd5783eae0f6637b39979e3a8648ae663d2150f9f9a575d4b36b2f2eb6` | https://msdl.microsoft.com/download/symbols/cryptui.dll/5D9FCFAF93000/cryptui.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `duser.dll` | `6.2.9200.20623` | 729600 | `6d79a128a477f28bf88733d564c2abea9986b9c726c590b8bf01e4f9bed375a1` | https://msdl.microsoft.com/download/symbols/duser.dll/510C8F44b7000/duser.dll | KB2811660 (Win8 Mar 2013 Rollup) |
+| `dwm.exe` | `6.2.9200.20521` | 117760 | `ee318f8eb290ae67d352794c71b86de7e39a01585324944359e95216feb2cf32` | https://msdl.microsoft.com/download/symbols/dwm.exe/505A96ED22000/dwm.exe | KB2756872 (Win8 GA Rollup) |
+| `dwmcore.dll` | `6.2.9200.22431` | 2197504 | `01d2a8f8ca7fae9fc78c3b1026401048e989e0198137a4c37f93c5184857e45c` | https://msdl.microsoft.com/download/symbols/dwmcore.dll/5ACB7A7321c000/dwmcore.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `msctf.dll` | `6.2.9200.23060` | 1118208 | `a054d58ce62b1cac31a9ee5700b3e88ea6eb7156836ec78356d4e942a41805f6` | https://msdl.microsoft.com/download/symbols/msctf.dll/5EBE05B1114000/msctf.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `printui.dll` | `6.2.9200.23459` | 1165824 | `0c1d5e5d919eb385d0b59298f831b61b876a2d4d35e94820e879d210eff5ad2a` | https://msdl.microsoft.com/download/symbols/printui.dll/61303B8B121000/printui.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `themeui.dll` | `6.2.9200.22569` | 2884608 | `9bcf2a6db06aad4ef6752ea4f88d776d6ace68feb46ef89e24fb99f62a499842` | https://msdl.microsoft.com/download/symbols/themeui.dll/5B92DCDE2c5000/themeui.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `udwm.dll` | `6.2.9200.20521` | 757248 | `dfbe1dbf46282c6be2e83390a086a5d02455ccc8451e040d7ee6c1f03e9fa885` | https://msdl.microsoft.com/download/symbols/udwm.dll/505A95CEbf000/udwm.dll | KB2756872 (Win8 GA Rollup) |
+| `uiautomationcore.dll` | `6.2.9200.20811` | 1160704 | `e03bf746b5e846f5dfd270e031e57bf5ae7e6b91d0d3ebb04591d53167589278` | https://msdl.microsoft.com/download/symbols/uiautomationcore.dll/521FFC5E11f000/uiautomationcore.dll | KB2883201 (Win8 Oct 2013 Rollup) |
+| `uxinit.dll` | `6.2.9200.22975` | 53760 | `09c99d0e8b0b7ef9fcb4329d3324cf4531022b20e7e6b70a3fc80b261daed30c` | https://msdl.microsoft.com/download/symbols/uxinit.dll/5A8C607B15000/uxinit.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `uxtheme.dll` | `6.2.9200.20534` | 907776 | `f8296e9a69679f2859bde40e468695a64d569ba53aa50f63b5b09ec8de84d3fd` | https://msdl.microsoft.com/download/symbols/uxtheme.dll/50763659e3000/uxtheme.dll | KB2770917 (Win8 Nov 2012 Rollup) |
+| `windows.ui.immersive.dll` | `6.2.9200.24163` | 1398272 | `c29fe96ba410a1085c59ed958bdf6bcb6b65f713b08b5e23816deb044d7d9ef6` | https://msdl.microsoft.com/download/symbols/windows.ui.immersive.dll/63EB067B15c000/windows.ui.immersive.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `windows.ui.xaml.dll` | `6.2.9200.22975` | 13658112 | `6439cf627158e6bad5da52eb08181711c24d9493fcd8346072865632c134f7c6` | https://msdl.microsoft.com/download/symbols/windows.ui.xaml.dll/5C9986D1d10000/windows.ui.xaml.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `windowscodecs.dll` | `6.2.9200.20652` | 1589760 | `406aa3e32629620232c52595052a4f7b0d4a011f9cc84f1b29008205d7c5b2b0` | https://msdl.microsoft.com/download/symbols/windowscodecs.dll/5131648218a000/windowscodecs.dll | KB2822241 (Win8 Apr 2013 Rollup) |

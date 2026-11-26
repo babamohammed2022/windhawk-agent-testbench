@@ -7,6 +7,11 @@ No Microsoft binaries are hosted in this repository — only metadata (`filename
 - Windows 7 SP1 Convenience Rollup May 2016 x64 (`KB3125574`)
 - Windows 7 SP1 Final Security Monthly Quality Rollup Jan 2023 x64 (`KB5022338`)
 
+## Sibling Archives
+- Windows 7 SP1 x64 (`6.1.7601`): `../win7-msdl-links/README.md`
+- Windows 8.0 x64 (`6.2.9200`): `../win8-msdl-links/README.md`
+- Windows 8.1 x64 (`6.3.9600`): `../win81-msdl-links/README.md`
+
 ## How to fetch with an AI / Scraper (Raw URLs)
 
 Use `https://raw.githubusercontent.com/babamohammed2022/windhawk-agent-testbench/main/win7-msdl-links/<PATH>`:

@@ -1,0 +1,13 @@
+name,version,size,sha256,url,source
+gdi32.dll,6.2.9200.20708,1294336,b50f7e979af3565d25dda6bf41a98f3c00fc4b448055f12f1fc1fefbfe836de2,https://msdl.microsoft.com/download/symbols/gdi32.dll/51847B16140000/gdi32.dll,KB2845533 (Win8 Jun 2013 Rollup)
+genuinecenter.dll,6.2.9200.20683,414720,e7dbd0ba6680650103181a115174ef0b9ab1d459b41c61873e96071b38f33902,https://msdl.microsoft.com/download/symbols/genuinecenter.dll/515F9CC969000/genuinecenter.dll,KB2836988 (Win8 May 2013 Rollup)
+glcndfilter.dll,6.2.9200.22731,11466752,025c6eff19dfdce9c29221a0d3bed0e452177bc4cb8391be30dd7e5c2177945b,https://msdl.microsoft.com/download/symbols/glcndfilter.dll/5C93A39Caf7000/glcndfilter.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gpapi.dll,6.2.9200.24457,102400,0d3dd4d3eafc874d8250963bf36c59d36db7674385175b978e864d45ab1c938d,https://msdl.microsoft.com/download/symbols/gpapi.dll/6317BC4F1e000/gpapi.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gpedit.dll,6.2.9200.23960,1133568,cd66fd51e2888fdd01b7051bf404a7a5312cfb119c1f98ebbcee6d1ffc31fcc3,https://msdl.microsoft.com/download/symbols/gpedit.dll/634385EF11a000/gpedit.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gpmgmt.dll,6.2.9200.20623,2317312,a2b20a6a695c54f0e0ef6613858e79a578bfbcdf0f5906604b0acc0fe03e617e,https://msdl.microsoft.com/download/symbols/gpmgmt.dll/510C968F23e000/gpmgmt.dll,KB2811660 (Win8 Mar 2013 Rollup)
+gpprefbr.dll,6.2.9200.23176,767488,4d1862ed96d0858c6fe3dbf00e0b0d5f759e3084213fdaa47b272bc84bd52850,https://msdl.microsoft.com/download/symbols/gpprefbr.dll/5F729D95c2000/gpprefbr.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gpprefcl.dll,6.2.9200.20604,820736,8aea2c666f5f35ca05d9cbbca6e62eab275a2a9d485d94975b1fba95e6900697,https://msdl.microsoft.com/download/symbols/gpprefcl.dll/50EE2EFAcc000/gpprefcl.dll,KB2795944 (Win8 Feb 2013 Rollup)
+gpprefcn.dll,6.2.9200.23176,211456,458c35201335f6e66ab6cd82cbc89479a5105fdf0727c6c74e35c36ec96d7cfb,https://msdl.microsoft.com/download/symbols/gpprefcn.dll/5F729DDF3b000/gpprefcn.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gpregistrybrowser.dll,6.2.9200.23176,272896,5c2a773233bfbaf4273b0aecd7465c84b9cc4b36b125e0aa335efc72e1b94722,https://msdl.microsoft.com/download/symbols/gpregistrybrowser.dll/5F72A0FA48000/gpregistrybrowser.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+gprsop.dll,6.2.9200.20623,499712,0c6a380d15ebcaf8986a24677fc2496ae46ca90205864396465cb8628cac7e54,https://msdl.microsoft.com/download/symbols/gprsop.dll/5010934E7e000/gprsop.dll,KB2811660 (Win8 Mar 2013 Rollup)
+groupinghc.dll,6.2.9200.22825,69120,d9ba61bbaf64768e48d667e82a6bc9edb92350c1da2195f0db05f670db5f805e,https://msdl.microsoft.com/download/symbols/groupinghc.dll/5D26986315000/groupinghc.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)

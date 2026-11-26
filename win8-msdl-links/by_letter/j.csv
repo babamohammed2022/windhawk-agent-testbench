@@ -1,0 +1,6 @@
+name,version,size,sha256,url,source
+journal.dll,6.2.9200.24362,19456,61eda937efa2b8d0f07c37cd5b3b67b7746579c1505aac6bfee1948bd21670bd,https://msdl.microsoft.com/download/symbols/journal.dll/6204A4369000/journal.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+jscript.dll,11.4.9600.21615,785408,be560a003765b90042cb8638efcaf30f90e29fc7c26a3cbe6ec466014b72c2b0,https://msdl.microsoft.com/download/symbols/jscript.dll/64FFEFF5c3000/jscript.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+jscript9.dll,10.0.9200.22975,3863552,aea8c87ee0e19fca2acd17830852897591c215f1b8ba134bc18049cdc49e112a,https://msdl.microsoft.com/download/symbols/jscript9.dll/5E208A3F3b7000/jscript9.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+jscript9diag.dll,11.4.9600.21615,814592,57c8358bf770c68ac01ec008ed9b14ef49848cab6fd8d7b08b7514482288560a,https://msdl.microsoft.com/download/symbols/jscript9diag.dll/64FFEFF0cb000/jscript9diag.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+jsproxy.dll,11.4.9600.21615,54784,3fe48bf00949e80b24370aa0ab8cb86253125a293145361c614c042d92f758c1,https://msdl.microsoft.com/download/symbols/jsproxy.dll/64FFF0A613000/jsproxy.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
