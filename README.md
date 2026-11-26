@@ -64,6 +64,39 @@ JUnit. Exit codes: **0** execution outcomes positive, **1** failure/unknown/time
 CI failures and requires confirmed init plus a zero exit code for positive levels.
 Intentional failures in `examples/` are not a green regression suite.
 
+## Fidelity-oriented report (additive v1)
+
+Every execution report now carries four extra, **descriptive** sections next to
+the unchanged `verdict.level`:
+
+- `capabilities.items` — one entry per capability (`compile`, `load`,
+  `public_hooks`, `internal_symbols`, `settings`, `persistent_storage`,
+  `target_shell`, `injection`, `tool_mod`, `disassembly`, `url_fetch`,
+  `dynamic_select`, `unload_hook_integrity`, `screenshot`), each with a status
+  and the evidence behind it: `verified` (executed here), `simulated`
+  (emulated by this bench), `not_verifiable` (needs real Windhawk/Windows),
+  `not_executed`, `failed` or `not_applicable`;
+- `api_inventory.apis` — every `Wh_*` / `WindhawkUtils::*` call visible in the
+  source, with its status against the cached official headers and the shim;
+  unknown names and stubs are also listed in `fidelity_warnings`;
+- `target_selection` — `@include` / `@exclude` matching and the declared
+  stand-in, separate from the runtime target/fallback in `include_analysis`;
+- `build.toolchain` and `build.compiler_options` — the compiler versions that
+  actually answered `--version`, effective `-std=`, accepted/rejected
+  `@compilerOptions`, libraries and flagged unknowns.
+
+```bash
+python3 -m awt.cli check examples/settings-array-demo.wh.cpp
+python3 -m awt.cli run examples/hook-createfilew.wh.cpp
+python3 -c 'import json; r=json.load(open(".sandbox/report.json")); print(r["capabilities"]["summary"])'
+```
+
+These sections never promote a simulation to a pass and never downgrade or
+upgrade `verdict.level`. A `verified` capability means this bench executed
+something that demonstrated it; it never means "works on Windows". See
+[`docs/fidelity-gap.md`](docs/fidelity-gap.md) for the observed comparison and
+[`docs/limitations.md`](docs/limitations.md) for what stays out of reach.
+
 ## PR readiness — replay Windhawk's PR validators (offline)
 
 Before submitting a mod to `ramensoftware/windhawk-mods`, replay the checks that

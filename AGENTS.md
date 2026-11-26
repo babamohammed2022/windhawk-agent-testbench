@@ -17,6 +17,33 @@ Report exactly the two lists `verdict.verified` and `verdict.not_verifiable_here
 `public_hooks_verified` means only: compiles, loads, public-API hooks fired, no crash
 **in the Wine sandbox**.
 
+## 2b. Reading the fidelity sections (do this before quoting a result)
+`verdict.level` is still the ladder you must quote first. In addition, read:
+
+1. `report["capabilities"]["items"]` — quote `status` and `evidence` literally.
+   `verified` = something really executed here; `simulated` = this bench's
+   emulation; `not_verifiable` = needs real Windhawk/Windows; `not_executed` =
+   no evidence; `failed` = attempted and failed. **Never** describe a
+   `simulated` or `not_verifiable` capability as passing, and never use these
+   sections to change `verdict.level`.
+2. `report["api_inventory"]["apis"]` — a `shim_implemented` entry means the
+   shim has a function, not that this mod called it. `stub`, `unknown_api`,
+   `wine_dependent` and `not_in_shim` must be quoted as warnings, not silently
+   omitted. `Wh_ModInit`-style entries are lifecycle exports of the mod.
+3. `report["fidelity_warnings"]` — each item says what could not be proved.
+   Stop and declare the item not verifiable when the warning concerns internal
+   symbols, tool mods, shell COM/DUI/XAML, unload integrity or injection.
+4. `report["target_selection"]` versus `report["include_analysis"]` — the first
+   is static pattern matching; the second records the target and fallback that
+   actually ran. Every target is a **stand-in**, never Explorer.
+5. `report["build"]["compiler_options"]` — rejected flags were *not applied*;
+   an accepted `-l<lib>` is only resolved if a build really succeeded. On a
+   `not_executed` report, quote no library or compiler version as verified.
+
+If a capability is `not_verifiable`, say so and stop: do not re-run the bench
+hoping for a different answer, do not edit the mod to please the sandbox, and
+do not add a fake shim result to make the section green.
+
 ## 3. Troubleshooting table
 | Symptom | Likely cause | Action |
 |---|---|---|

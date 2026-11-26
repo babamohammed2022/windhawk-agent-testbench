@@ -45,3 +45,18 @@ remote injection, `AppInit_DLLs`, native Windows verification, GPU-accurate
 rendering, and the tool-process lifecycle. Implementing an emulated version of
 any of them must be labelled `simulated` in the report; it must never upgrade a
 verdict.
+
+
+## Status after this branch (2026-11-26)
+
+| Gap | Status now |
+|---|---|
+| Metadata tags, localisations, wildcard/full-path include + exclude, nested/indexed settings | Addressed in `awt/metadata.py` and `awt/targeting.py`, with offline tests. Settings values are still `simulated` at runtime. |
+| `@compilerOptions` classification, accepted flags reaching compiler/linker, compiler version record | Addressed in `awt/compileroptions.py` and `awt/builder.py`; rejected flags are warnings. No claim of library resolution without a real build. |
+| Capability matrix, API inventory, fidelity warnings, stand-in rationale | Additive sections in `awt/fidelity.py` and `awt/report.py`; `verdict.level` untouched. |
+| Static detection of unknown/stub APIs and Wine-unverifiable surfaces | `awt/staticchecks.py`; descriptive only. |
+| Representative examples | `settings-array-demo`, `tool-mod-demo`, `symbol-lookup-demo` added beside the existing mods. |
+| Shim API completeness (`Wh_ListValues`, `Wh_GetModName`, `Wh_IsLocalMod`, `Wh_SetFunctionHookDirect`, configurable symbol table, tool mod) | **Open and documented as not implemented / not verifiable.** The requested names are absent from the cached official headers; inventing them would create false positives. |
+| New C++ targets, hook instrumentation, real unload/reload assertions, screenshot/timing/memory capture extension | **Open.** This sandbox cannot compile or run C++, so no untested executable was added. |
+| x86 / arm64 compilation, llvm-mingw switch | **Open.** Only x86-64 MinGW is present; the report records the compiler that actually answered. |
+| Wine acceptance checks | **Not executed here.** Unit tests pass; the 18 Wine checks remain skipped until a machine with Wine/MinGW/Xvfb runs `./tests/run_tests.sh`. |
