@@ -1,0 +1,21 @@
+# Windows 8.0 x64 (6.2.9200) — Shell & Explorer (17 files)
+
+| File | Version | Size (bytes) | SHA-256 | Microsoft Symbol Server URL | Source |
+|---|---|---|---|---|---|
+| `actxprxy.dll` | `6.2.9200.24365` | 2092544 | `acc035cb96309b085270229ff4fb0bfac0a76cf279ea3170f600884479dc83db` | https://msdl.microsoft.com/download/symbols/actxprxy.dll/60AF01FD202000/actxprxy.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `authui.dll` | `6.2.9200.24365` | 2298880 | `7e421a574e8aa7b93306f0cf6cf9c0981f2fdf8d892ffb3e12b8ebd03faf776d` | https://msdl.microsoft.com/download/symbols/authui.dll/639A9DE7237000/authui.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `batmeter.dll` | `6.2.9200.20521` | 2016256 | `acc304c110e735d284173b3bc4d895cb4f088f22901ce1bf4d8e337d6609d130` | https://msdl.microsoft.com/download/symbols/batmeter.dll/505AB1941f0000/batmeter.dll | KB2756872 (Win8 GA Rollup) |
+| `explorer.exe` | `6.2.9200.20733` | 2380968 | `7dbe4421ac9d032bc156486c915f216b3bbeeb0c1c94f0fb18c199fcfd27814c` | https://msdl.microsoft.com/download/symbols/explorer.exe/51A96735243000/explorer.exe | KB2855336 (Win8 Jul 2013 Rollup) |
+| `explorerframe.dll` | `6.2.9200.22484` | 2977280 | `63948b6d7e504fb05cffd216eae447df658977ac0281c8e8877d0457b52f280a` | https://msdl.microsoft.com/download/symbols/explorerframe.dll/5B1E8BBF2da000/explorerframe.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `ieframe.dll` | `11.4.9600.21615` | 15507456 | `fbb24d20ab4640bcfe3038be9fe574046dd3ea3fa53ac3e2856fa832d90ee1e9` | https://msdl.microsoft.com/download/symbols/ieframe.dll/64FFEC4Ced1000/ieframe.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `netshell.dll` | `6.2.9200.23213` | 2827776 | `9e26c235beb2380d8da9cb62aba20345b45fb6fccd20e883aa1ea68b1cfb9b07` | https://msdl.microsoft.com/download/symbols/netshell.dll/5FA1D65F2b7000/netshell.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `propsys.dll` | `7.0.9200.20521` | 1400832 | `7002a95f5114b152cf5945b976c21d5db6aa09b3d0116ce44b20b3010fea812b` | https://msdl.microsoft.com/download/symbols/propsys.dll/505A95AD15a000/propsys.dll | KB2756872 (Win8 GA Rollup) |
+| `shcore.dll` | `6.2.9200.20534` | 590848 | `0cbdd0a02d3da74fcf779a6595440dc9508881c90f3b171569002ac737ecf6c1` | https://msdl.microsoft.com/download/symbols/shcore.dll/5076384596000/shcore.dll | KB2770917 (Win8 Nov 2012 Rollup) |
+| `shdocvw.dll` | `6.2.9200.22260` | 222208 | `3a553ddf5cfbf21b93d5defaa74e0d8c87121a80e719b4327d3ced4a50d6ffb3` | https://msdl.microsoft.com/download/symbols/shdocvw.dll/59986A5339000/shdocvw.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `shell32.dll` | `6.2.9200.21269` | 19778048 | `5ff811cb94380728b4caf67396cc479b17a1c769196f253aa0829fad864510b5` | https://msdl.microsoft.com/download/symbols/shell32.dll/5438A2AE12e5000/shell32.dll | KB3000853 (Win8 Nov 2014 Rollup) |
+| `shlwapi.dll` | `6.2.9200.23913` | 290304 | `249ee66eaf167d31e850bc37802125e9c47122b7d8df92223a46b84ba3aa149f` | https://msdl.microsoft.com/download/symbols/shlwapi.dll/6261A8B04b000/shlwapi.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `stobject.dll` | `6.2.9200.20708` | 331264 | `12952344a39c986083d74e1aa5be79962c5c153dcb593465032a9c403e1c384a` | https://msdl.microsoft.com/download/symbols/stobject.dll/5184716255000/stobject.dll | KB2845533 (Win8 Jun 2013 Rollup) |
+| `structuredquery.dll` | `7.0.9200.23081` | 580096 | `d7187f8b2754e9e81d485862987632d0ae8f78df1d2a6be70fbb7a0c28b40eee` | https://msdl.microsoft.com/download/symbols/structuredquery.dll/5EDA5D2992000/structuredquery.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `twinui.dll` | `6.2.9200.24365` | 9370112 | `2661bb8f96ae1d1ca3c08750280044f33b19361bd39a6a23fda7a71c4bdc680a` | https://msdl.microsoft.com/download/symbols/twinui.dll/639AA1C18f8000/twinui.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `urlmon.dll` | `11.4.9600.21615` | 1564160 | `974fdc807e6798d9f96c4dff966c5da0e6739bc5b13d6445595cae31d5bbe2fa` | https://msdl.microsoft.com/download/symbols/urlmon.dll/64FFE88B18a000/urlmon.dll | KB5031442 (Win8/S2012 Oct 2023 Rollup) |
+| `van.dll` | `6.2.9200.20521` | 541184 | `acd5ef34d5872e90a09713e51d651c84f1a43ec8b787d8eda6d1d6c2f9be4c89` | https://msdl.microsoft.com/download/symbols/van.dll/505AA21F89000/van.dll | KB2756872 (Win8 GA Rollup) |

@@ -1,0 +1,3 @@
+name,version,size,sha256,url,source
+qdvd.dll,6.2.9200.23057,323072,a1edc851a9770ec9b08e491a2fe9504da17438be69a20c5a4231080910b6b9da,https://msdl.microsoft.com/download/symbols/qdvd.dll/5EB6C94153000/qdvd.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+quota.sys,6.2.9200.23671,174856,dcabb6ec04467fdb0f71288cd1c76670444d50c1d3a9bd6950469edfa1d0717a,https://msdl.microsoft.com/download/symbols/quota.sys/6226D23E2e000/quota.sys,KB5031442 (Win8/S2012 Oct 2023 Rollup)

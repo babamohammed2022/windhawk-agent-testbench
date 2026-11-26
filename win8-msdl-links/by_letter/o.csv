@@ -1,0 +1,5 @@
+name,version,size,sha256,url,source
+oleprn.dll,6.2.9200.22715,123904,f7e9e1b6fd6b88482d5623f8aa31e057c802e53ef9f43bf4af385a40e28e9130,https://msdl.microsoft.com/download/symbols/oleprn.dll/5C83E0B622000/oleprn.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+onex.dll,6.2.9200.23332,230912,ae2aec724dad9bc961080c64b39b0af8debe7bbb012e230f7f977024419496e9,https://msdl.microsoft.com/download/symbols/onex.dll/6046F59D40000/onex.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+onexui.dll,6.2.9200.23332,1081856,785ff840b11402f626942de1e892f10d2787959191504fc77668280d81e71a3b,https://msdl.microsoft.com/download/symbols/onexui.dll/6046FDF710b000/onexui.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+osprovider.dll,6.2.9200.20708,143872,7f2f01508eac73fa965d9a9b78299e3f72605bd648541679e4e95ece3414b6bf,https://msdl.microsoft.com/download/symbols/osprovider.dll/5010A1D147000/osprovider.dll,KB2845533 (Win8 Jun 2013 Rollup)

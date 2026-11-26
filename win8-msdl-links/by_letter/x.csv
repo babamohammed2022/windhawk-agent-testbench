@@ -1,0 +1,6 @@
+name,version,size,sha256,url,source
+xmllite.dll,6.2.9200.22816,241664,a79e59fd44f1574507bfb46e464a5352389ea42ba9483349d6f5c67e63e99b83,https://msdl.microsoft.com/download/symbols/xmllite.dll/5D1776AF3f000/xmllite.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+xpsgdiconverter.dll,6.2.9200.20733,523264,6b78b21cf36f433b01d60433072d4cad4bf7456e5105bcecbed2d2a789d91fcb,https://msdl.microsoft.com/download/symbols/xpsgdiconverter.dll/51A97BCE84000/xpsgdiconverter.dll,KB2855336 (Win8 Jul 2013 Rollup)
+xpsrasterservice.dll,6.2.9200.20683,228352,1a0c596a739ef592c3b010334dec7dcee549086b28a66f205f186bd1129ff34e,https://msdl.microsoft.com/download/symbols/xpsrasterservice.dll/510CA4FE3c000/xpsrasterservice.dll,KB2836988 (Win8 May 2013 Rollup)
+xpsrchvw.exe,6.2.9200.22348,4733952,64f22381dc43bb34616508fffc9af882e5616982c035299c009c241ff8d1e84b,https://msdl.microsoft.com/download/symbols/xpsrchvw.exe/5A58D81248e000/xpsrchvw.exe,KB5031442 (Win8/S2012 Oct 2023 Rollup)
+xpssvcs.dll,6.2.9200.24313,1491968,7c4299cd2e4bf1da435f8fdc95b44200f71f6bfcf1e17cfd54e4c0690b8e8c47,https://msdl.microsoft.com/download/symbols/xpssvcs.dll/5215F349171000/xpssvcs.dll,KB5031442 (Win8/S2012 Oct 2023 Rollup)

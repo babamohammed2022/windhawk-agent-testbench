@@ -1,0 +1,24 @@
+# Windows 8.1 x64 (6.3.9600) — Graphics & Media (20 files)
+
+| File | Version | Size (bytes) | SHA-256 | Microsoft Symbol Server URL | Source |
+|---|---|---|---|---|---|
+| `audioses.dll` | `6.3.9600.19409` | 500464 | `97a95dbb0744b28cfbb6be3fa7a70e0c3ee4f417006d974c6e4663ea846a32aa` | https://msdl.microsoft.com/download/symbols/audioses.dll/5CE88A607e000/audioses.dll | KB5022352 (Win8.1 Jan 2023 Rollup) |
+| `d2d1.dll` | `6.3.9600.17415` | 4709888 | `b579f6f6bf3c014561b2076ace6b5e8abab78fb60276906db5fb95a1a732eb9b` | https://msdl.microsoft.com/download/symbols/d2d1.dll/5450445B481000/d2d1.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `d3d10.dll` | `6.3.9600.17415` | 1242112 | `b4655e7cbc7e924219b8ae9a18d359368405d0c9127d0a3ae8d344f425f6b8b0` | https://msdl.microsoft.com/download/symbols/d3d10.dll/54503FD5138000/d3d10.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `d3d10_1.dll` | `6.3.9600.17415` | 188416 | `9483c359becd40fc7f38cfdf167e0f7f80e5c08a59a63b7340ff35cb3e20c19b` | https://msdl.microsoft.com/download/symbols/d3d10_1.dll/5450406533000/d3d10_1.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `d3d10warp.dll` | `6.3.9600.19176` | 2465792 | `fcb39f1f3f6ab7bbf21fca6d1f52ca033159dccf88511677ba467b52df7049cd` | https://msdl.microsoft.com/download/symbols/d3d10warp.dll/5BB8D79525f000/d3d10warp.dll | KB5022352 (Win8.1 Jan 2023 Rollup) |
+| `d3d9.dll` | `6.3.9600.17415` | 2229168 | `0e3a267cc2a1b079b6e13d0b8a532a7c6456d1bb56e11a779772f7eceacb4a66` | https://msdl.microsoft.com/download/symbols/d3d9.dll/54505402221000/d3d9.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `dcomp.dll` | `6.3.9600.17415` | 379568 | `72407fb7e12a051b6f1b5ca6426226ac7c3b0e27c5db31abf36de822ca2b4a18` | https://msdl.microsoft.com/download/symbols/dcomp.dll/545041F660000/dcomp.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `ddraw.dll` | `6.3.9600.17415` | 594944 | `eaeb6dfa94e27c9e8a2ec10e70a6a60dbc0fd2971490feefa890a90534a64cee` | https://msdl.microsoft.com/download/symbols/ddraw.dll/54503DD0f8000/ddraw.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `dsound.dll` | `6.3.9600.17415` | 620544 | `df13e9a209cdd228bdbd1c3e3fe13f8eddc885cc3a96f89bdb81ac4ef9f06318` | https://msdl.microsoft.com/download/symbols/dsound.dll/545050EC9d000/dsound.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `dwrite.dll` | `6.3.9600.20139` | 1995264 | `8410c029df2d3e535838b3e9c318398a230563a8c4e3aafa26cdb59670f759e8` | https://msdl.microsoft.com/download/symbols/dwrite.dll/614021201ec000/dwrite.dll | KB5022352 (Win8.1 Jan 2023 Rollup) |
+| `dxgi.dll` | `6.3.9600.17415` | 544408 | `36357d753058e0dadeb5aae2b3a646f5d0d3c7ff31f249d4ac6a9758d8b8cde6` | https://msdl.microsoft.com/download/symbols/dxgi.dll/545041EB87000/dxgi.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `evr.dll` | `6.3.9600.17415` | 734448 | `46979e940e3506ae39e93b0021e614af7cfc117cc760848d0ff6ea04d7597ab2` | https://msdl.microsoft.com/download/symbols/evr.dll/54505011b5000/evr.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `glu32.dll` | `6.3.9600.17415` | 165888 | `7e43bd275deb87def356b58f81bb4c558531d11a56ea00b23d69acfc7768172c` | https://msdl.microsoft.com/download/symbols/glu32.dll/545054932e000/glu32.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `mfcore.dll` | `6.3.9600.19033` | 2334624 | `b6a662329d4d57af9e8428a325167f9aeb21e76b08c49fa70da07b85fb3c3b31` | https://msdl.microsoft.com/download/symbols/mfcore.dll/5AFA4740239000/mfcore.dll | KB5022352 (Win8.1 Jan 2023 Rollup) |
+| `mfplat.dll` | `6.3.9600.17415` | 962216 | `6dc4b3e16f08a4f161625811e190f523c4bd21f56eba62aac8abc94af9638184` | https://msdl.microsoft.com/download/symbols/mfplat.dll/54503D0Eeb000/mfplat.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `mmdevapi.dll` | `6.3.9600.17415` | 444728 | `bf0458ba1377fee84dc60fd5b08241bee69a8c7df55396c3a5f1727dfeea3da4` | https://msdl.microsoft.com/download/symbols/mmdevapi.dll/54503F1870000/mmdevapi.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `opengl32.dll` | `6.3.9600.17415` | 1091584 | `2571a61df18494adf4a90f901ca26b99eab8677d0aeacfabfad9f423ae60bf3e` | https://msdl.microsoft.com/download/symbols/opengl32.dll/5450540212b000/opengl32.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `winmm.dll` | `6.3.9600.17415` | 126056 | `98bb68af9f6fb5147a6544d82bc3753c2490c03273a424be22545195fdafa6e5` | https://msdl.microsoft.com/download/symbols/winmm.dll/54503F1222000/winmm.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |
+| `wmp.dll` | `6.3.9600.19482` | 15441408 | `dee16ecb6a3ba1b8a6792b472be881bcc77675f3294ef1a7ebe1b3b041c02fcf` | https://msdl.microsoft.com/download/symbols/wmp.dll/5D73C9D3ec9000/wmp.dll | KB5022352 (Win8.1 Jan 2023 Rollup) |
+| `xaudio2_8.dll` | `6.3.9600.17415` | 293376 | `1b35003fd9870e14ca0bb90b9ff135ad102d62f0fbd93be227687799874c07a4` | https://msdl.microsoft.com/download/symbols/xaudio2_8.dll/54503E774d000/xaudio2_8.dll | KB3000850 (Win8.1 Nov 2014 Rollup) |

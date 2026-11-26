@@ -1,0 +1,4 @@
+name,version,size,sha256,url,source
+1394bus.sys,6.1.7601.23403,68096,04dcf0d48e2e9041d7d22980589e9785cf2424c07bd25df10ea3ccdca57de0ab,https://msdl.microsoft.com/download/symbols/1394bus.sys/56F57E4C18000/1394bus.sys,Rollup 2016 (KB3125574)
+1394ohci.sys,6.1.7601.17514,229888,b1507868c382cd5d2dbc0d62114fcfbf7a780904a2e3ca7c7c1dd0844ada9a8f,https://msdl.microsoft.com/download/symbols/1394ohci.sys/4CE7A6A83e000/1394ohci.sys,SP1 (KB976932)
+4mmdat.sys,6.1.7601.23403,16384,27d83587fbcdca315758e02911261cb682bbdb995142996e3386fe217dbd254e,https://msdl.microsoft.com/download/symbols/4mmdat.sys/56F57D769000/4mmdat.sys,Rollup 2016 (KB3125574)

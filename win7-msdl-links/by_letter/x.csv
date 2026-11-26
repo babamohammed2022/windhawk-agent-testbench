@@ -1,0 +1,9 @@
+name,version,size,sha256,url,source
+xmllite.dll,6.1.7601.17514,199680,73a94b4938430396ea4240b1a6676b4e6c19cfaf8c52efb9a69b4b2175a86307,https://msdl.microsoft.com/download/symbols/xmllite.dll/4A5BE09835000/xmllite.dll,SP1 (KB976932)
+xolehlp.dll,6.1.7601.23403,59392,b944771f7aa5a64431a6f8817dba0842195b027fbd25104561dc88895b2c1ec2,https://msdl.microsoft.com/download/symbols/xolehlp.dll/56F58BBF14000/xolehlp.dll,Rollup 2016 (KB3125574)
+xpsgdiconverter.dll,6.1.7601.17514,470016,5101349d087538f4e902b8d969d3a4147abd77444c8d9839bf826e7af4a877bc,https://msdl.microsoft.com/download/symbols/xpsgdiconverter.dll/4CE7CA3676000/xpsgdiconverter.dll,SP1 (KB976932)
+xpsprint.dll,6.1.7601.17514,1465344,c77070ea8736e1ec5ecca8bdfa9ce744c16f9afd02599617bac3dc525d4a2830,https://msdl.microsoft.com/download/symbols/xpsprint.dll/4CE7CA37169000/xpsprint.dll,SP1 (KB976932)
+xpsrasterservice.dll,6.1.7601.17514,229888,de85c4b720c2bcf397778d2b5b8fc164976158a8ba613ed1b7f255a37835a5e4,https://msdl.microsoft.com/download/symbols/xpsrasterservice.dll/4CE7CA383d000/xpsrasterservice.dll,SP1 (KB976932)
+xpsrchvw.exe,6.1.7601.23403,4834816,4f841082699be59fa4ad1085ecddf96bb6f723fafa3cf88f8090b39094d7f67a,https://msdl.microsoft.com/download/symbols/xpsrchvw.exe/56F583BE4a6000/xpsrchvw.exe,Rollup 2016 (KB3125574)
+xpsservices.dll,6.1.7601.17514,3008000,41e7c0573bd41ec71a40fb337f873b2321c63735348bd9aa302abb04dee1dad9,https://msdl.microsoft.com/download/symbols/xpsservices.dll/4CE7CA392e4000/xpsservices.dll,SP1 (KB976932)
+xpssvcs.dll,6.1.7601.17514,1576448,30341115869cb302e80e45cc3a833c93ac3d35b0bb8de97f4c59c7286f7642f6,https://msdl.microsoft.com/download/symbols/xpssvcs.dll/4CE7CA3B185000/xpssvcs.dll,SP1 (KB976932)
