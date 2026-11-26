@@ -96,8 +96,19 @@ def main():
         "contract for signatures.",
     ]
     out = os.path.join(REPO, "docs", "shim-status.md")
-    with open(out, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    text = "\n".join(lines) + "\n"
+    # Do not dirty the tree with a timestamp-only change: the table is the
+    # checked-in record, the clock is not evidence about the shim.
+    if os.path.exists(out):
+        previous = open(out, encoding="utf-8").read()
+        blank = lambda s: re.sub(r"^Last check: .*$", "Last check: <time>",
+                                 s, flags=re.M)
+        if blank(previous) == blank(text):
+            text = previous
+    current = open(out, encoding="utf-8").read() if os.path.exists(out) else None
+    if text != current:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(text)
     print("conformance: %d implemented, %d stub, %d missing" % (len(impl), len(stubs), len(missing)))
     if missing:
         print("MISSING:", ", ".join(missing))
