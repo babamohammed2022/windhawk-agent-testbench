@@ -231,3 +231,17 @@
     callback ordering stay `not_verifiable` or `simulated` as recorded in
     `capabilities`. A same-value settings callback is still a notification,
     not a real settings reload.
+
+38. **Observations from real shell-recreation mods (2026-11-26).** Three
+    user-supplied mods from `babamohammed2022`'s public repositories were read
+    in this sandbox (a Start-menu mod, a classic-taskbar-menu mod and the
+    Windows 7 network flyout recreation) to check the parsers. None was copied
+    into this repository or compiled here; they remain under their own
+    licences. Their metadata, compiler options and settings parse, but the
+    bench still cannot demonstrate Start-menu XAML hooks, taskbar behaviour,
+    WLAN/network-list COM objects, or undocumented `dui.dll` ordinals. Those
+    surfaces are reported as `not_verifiable` with a verification plan.
+39. **Static surface detection is not execution.** `awt/shellsurfaces.py`
+    matches source text, including short string literals such as
+    `L"Shell_TrayWnd"`; long resource lines are skipped to avoid false hits.
+    A detected surface means the mod *references* it, not that a hook worked.

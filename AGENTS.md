@@ -44,6 +44,30 @@ If a capability is `not_verifiable`, say so and stop: do not re-run the bench
 hoping for a different answer, do not edit the mod to please the sandbox, and
 do not add a fake shim result to make the section green.
 
+## 2c. Shell-recreation mods (Start menu, taskbar, flyouts, classic dialogs)
+Read `report["shell_surfaces"]` before quoting anything about a shell mod:
+
+* `surfaces[].coverage == "not_verifiable"` means there is no honest stand-in
+  for that surface (Start/XAML host, WLAN network list, undocumented `dui.dll`
+  ordinals, common dialogs, runtime downloads). Say so and stop; quote
+  `verification_plan` for the checks that still need real Windows. Never use
+  `wh_implemented` or a successful build to promote it.
+* `surfaces[].coverage == "simulated"` means a declared stand-in may exercise
+  similar *public* APIs. Quote `surfaces[].stand_in` and `reason`; do not say
+  "taskbar verified" because a scripted Win32 scene produced pixels.
+* `target_selection.suggested_stand_in == null` is expected for a Start-menu
+  mod: there is no faithful XAML host here. `include_analysis` still records
+  what the runner actually did and why it fell back.
+* Multi-include mods (`explorer.exe` + `control.exe`) get one primary stand-in;
+  the control.exe include is only probed, not a second execution.
+* A string literal such as `L"Shell_TrayWnd"` is evidence that the mod *looks
+  for* that class, not that the class belonged to a real shell here.
+* Long base64/resource lines are excluded from surface detection; an agent
+  must not conclude from them that DUI/XAML code is present.
+
+The same mod can have several surfaces with different coverage. Quote each one
+literally, and keep the overall verdict ladder unchanged.
+
 ## 3. Troubleshooting table
 | Symptom | Likely cause | Action |
 |---|---|---|

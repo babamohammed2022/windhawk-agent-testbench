@@ -97,6 +97,30 @@ something that demonstrated it; it never means "works on Windows". See
 [`docs/fidelity-gap.md`](docs/fidelity-gap.md) for the observed comparison and
 [`docs/limitations.md`](docs/limitations.md) for what stays out of reach.
 
+## Shell-recreation mods: what the bench can and cannot show
+
+For mods that recreate a Start menu, taskbar, network flyout or classic dialog,
+`run` now adds `shell_surfaces`: detected Win32/UI surfaces, the stand-in (if
+any) and whether the observation would be `simulated` or `not_verifiable`. It
+also provides a short `verification_plan` of checks to run on real Windows.
+
+```bash
+python3 -m awt.cli run /path/to/shell-recreation.wh.cpp
+python3 -c 'import json; r=json.load(open(".sandbox/report.json")); \
+print([(s["id"], s["coverage"]) for s in r["shell_surfaces"]["surfaces"]]); \
+print(r["shell_surfaces"]["verification_plan"])'
+```
+
+A `start_menu`, `network_shell`, `common_dialogs`, `dark_mode_undocumented` or
+`resources_download` surface has no faithful stand-in here: the report says
+`not_verifiable` and the agent should stop and list the remaining Windows
+checks instead of calling the mod good. `taskbar`, `tray_icon`, `menus`, `dwm`
+and `control_panel` can be *observed* only through declared stand-ins and stay
+`simulated`. The human summary prints `real Windows: unknown` for any report
+where nothing was executed; it never implies that a shell mod needs no Windows
+verification. Third-party mods may be GPL-3.0: this repository never vendors
+their source, only the static analysis code that reads a user-supplied file.
+
 ## PR readiness — replay Windhawk's PR validators (offline)
 
 Before submitting a mod to `ramensoftware/windhawk-mods`, replay the checks that

@@ -60,3 +60,14 @@ verdict.
 | New C++ targets, hook instrumentation, real unload/reload assertions, screenshot/timing/memory capture extension | **Open.** This sandbox cannot compile or run C++, so no untested executable was added. |
 | x86 / arm64 compilation, llvm-mingw switch | **Open.** Only x86-64 MinGW is present; the report records the compiler that actually answered. |
 | Wine acceptance checks | **Not executed here.** Unit tests pass; the 18 Wine checks remain skipped until a machine with Wine/MinGW/Xvfb runs `./tests/run_tests.sh`. |
+
+
+## Shell-recreation follow-up (same branch, 2026-11-26)
+
+| Gap | Status now |
+|---|---|
+| Shell-recreation mods were mapped to a generic stand-in | `awt/shellsurfaces.py` detects per-surface coverage and produces a concrete `verification_plan`; `awt/targeting.py` handles Start/XAML includes and explorer+control multi-includes |
+| Static checks fired on base64 resource blobs and on deprecated `WindhawkUtils::Wh_SetFunctionHookT` | Both fixed: long lines are excluded from pattern matching and the deprecated alias resolves to `InternalWh_SetFunctionHook` |
+| Standard MinGW import libraries used by real recreations (`-liphlpapi`, `-lwlanapi`, `-luuid`) produced false "unverified library" warnings | Added to the known import-library set; only a real linker can still prove resolution |
+| `not_executed` reports printed "real Windows: not required" even for shell mods | The summary now prints `unknown (nothing was executed here)` |
+| C++/Wine runtime fidelity for shell surfaces, internal symbol hooks and real Start menu/flyout behaviour | **Still open and `not_verifiable`.** No untested target or fake symbol table was added. |
