@@ -277,7 +277,7 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 - `targets/` — `testapp.exe` (generic Win32 hook target), `trayapp.exe` (tray client),
   `enumwins.exe` (window-class probe).
 - `examples/`, `tests/shim_conformance/` — mods used as acceptance tests.
-- `docs/` — `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
+- `docs/` — `how-windhawk-works.md` (spiegazione introduttiva, in italiano, con fonti ufficiali), `links.md`, `limitations.md`, `shim-status.md`, `symbol-matrix.md`,
   `backends.md`, `vm-protocol.md`, `reference-vms.md`, `visual-diff.md`, official
   headers cache.
 - `host/desktop.cpp`, `awt/desktop.py` — scripted simulated desktop: windows, taskbar, notification area, input messages, capture and assertions.
@@ -301,4 +301,4 @@ Details: [`docs/visual-diff.md`](docs/visual-diff.md).
 5. mod initialised, hooks applied, target driven so hooks fire, teardown, logs and
    optional screenshots collected into `.sandbox/report.json`.
 
-See `AGENTS.md` for agent workflow and `docs/limitations.md` for what Wine cannot do.
+See `AGENTS.md` for agent workflow, `docs/limitations.md` for what Wine cannot do, and `docs/how-windhawk-works.md` for a source-based explanation of real Windhawk (in Italian).

@@ -245,3 +245,11 @@
     matches source text, including short string literals such as
     `L"Shell_TrayWnd"`; long resource lines are skipped to avoid false hits.
     A detected surface means the mod *references* it, not that a hook worked.
+
+40. **The shim's unload path is not the engine's.** The official wiki documents
+    that Windhawk calls `Wh_ModBeforeUninit` → hook removal → `Wh_ModUninit` on
+    an explicit mod unload, but does **not** call those callbacks when the host
+    process exits (only global destructors run, under the loader lock). This
+    bench's `DllMain` invokes both callbacks on `DLL_PROCESS_DETACH`, so a
+    "clean exit" observed here is not evidence about that Windhawk path. The
+    source-based overview is `docs/how-windhawk-works.md`.

@@ -239,6 +239,9 @@ no ReactOS code/assets, no leaked Windows code; raise licensing doubts with the 
 
 ## 6. Links
 See `docs/links.md` (all URLs verified). Official headers cached in `docs/official/`.
+For background on what the real engine does — injection, mod lifetime, API,
+tool mods — read `docs/how-windhawk-works.md` (Italian, source-based summary).
+Never use that background to claim that this bench performs those steps.
 
 ## 7. Safety
 Everything stays inside this repository directory: Wine prefix, logs, builds and
