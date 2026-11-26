@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 
-from . import env, metadata
+from . import compileroptions, env, metadata
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _tool(env_name, cross, native_candidates):
@@ -129,21 +129,58 @@ def merge_settings(settings, override):
     return merged, unknown
 
 
+def _version_line(command):
+    """First line of `--version`, or None. Never execute a missing tool."""
+    try:
+        p = subprocess.run([command, "--version"], capture_output=True,
+                           text=True, timeout=10)
+        line = (p.stdout or p.stderr).splitlines()
+        return line[0].strip()[:300] if line and p.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def toolchain_record(std="-std=c++20"):
+    """What actually answered `--version` on this machine, not what we assume."""
+    return {
+        "target_arch": "x86-64",
+        "cxx": CC, "cxx_version": _version_line(CC),
+        "cc": CC_C, "cc_version": _version_line(CC_C),
+        "nm": NM, "cxxfilt": FILT,
+        "std": std, "base_libraries": list(BASE_LIBS),
+        "note": ("Version fields are recorded only when the tool answered. "
+                 "This bench cross-compiles to x86-64 with MinGW; it is not the "
+                 "Windhawk Clang/lld/libc++ toolchain. Other architectures are "
+                 "not compiled here."),
+    }
+
+
 def build(mod_path, sandbox=None, settings_override=None):
     mod_path = os.path.abspath(mod_path)
     sandbox = sandbox or os.path.join(REPO, ".sandbox")
     source = open(mod_path, encoding="utf-8", errors="replace").read()
     meta = metadata.parse_metadata(source)
-    settings, unknown_settings = merge_settings(
-        metadata.parse_settings(source), settings_override)
+    settings_flat, _tree, settings_warnings = metadata.parse_settings_ex(source)
+    settings, unknown_settings = merge_settings(settings_flat, settings_override)
     mod_id = meta["raw"].get("id", os.path.splitext(os.path.basename(mod_path))[0])
     bdir = os.path.join(sandbox, "build", mod_id)
     os.makedirs(bdir, exist_ok=True)
 
+    opts = compileroptions.classify(meta["compilerOptions"])
+    std = opts["standards"][0] if opts["standards"] else "-std=c++20"
     result = {"ok": False, "errors": [], "warnings": [], "dll": None,
               "mod_id": mod_id, "meta": meta, "settings": settings,
               "settings_override_unknown": unknown_settings,
+              "compiler_options": opts, "toolchain": toolchain_record(std),
               "build_dir": bdir, "toolchain_missing": []}
+    for warning in list(meta.get("warnings") or []) + settings_warnings:
+        result["warnings"].append({"file": mod_path, "line": 0, "col": 0,
+                                   "message": warning})
+    for rejected in opts["rejected"]:
+        result["warnings"].append({
+            "file": mod_path, "line": 0, "col": 0,
+            "message": "@compilerOptions %s not applied: %s" % (
+                rejected["flag"], rejected["reason"])})
     missing = missing_toolchain()
     if missing:
         result["toolchain_missing"] = missing
@@ -160,13 +197,13 @@ def build(mod_path, sandbox=None, settings_override=None):
     result["settings_json"] = settings_path
 
     mod_o = os.path.join(bdir, "mod.o")
-    cmd = [CC, "-c", "-std=c++20", "-O1",
+    cmd = [CC, "-c", std, "-O1",
            "-I", os.path.join(REPO, "shim", "include"), "-include", "awt_compat.h",
            "-DWH_MOD", "-DUNICODE", "-D_UNICODE",
            '-DWH_MOD_ID=L"%s"' % mod_id,
            '-DWH_MOD_VERSION=L"%s"' % meta["raw"].get("version", "0.0.0"),
-           "-I", os.path.join(REPO, "shim", "include"),
-           "-o", mod_o, mod_path]
+           "-I", os.path.join(REPO, "shim", "include")] + \
+          compileroptions.compile_flags(opts) + ["-o", mod_o, mod_path]
     p = _run(cmd)
     errs, warns = _parse_diagnostics(p.stderr)
     result["errors"] += errs
@@ -213,7 +250,8 @@ def build(mod_path, sandbox=None, settings_override=None):
         objs.append(o)
 
     dll = os.path.join(bdir, mod_id + ".dll")
-    cmd = [CC, "-shared", "-o", dll] + objs + [defp] + BASE_LIBS + meta["compilerOptions"] + \
+    cmd = [CC, "-shared", "-o", dll] + objs + [defp] + BASE_LIBS + \
+          compileroptions.link_flags(opts) + \
           ["-static-libgcc", "-static-libstdc++", "-lmsvcrt"]
     p = _run(cmd)
     e3, w3 = _parse_diagnostics(p.stderr)

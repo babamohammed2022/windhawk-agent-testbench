@@ -124,3 +124,68 @@ def test_target_selection_is_always_a_declared_stand_in():
                             {"subjects": ["system-tray"]})
     assert tray["suggested_stand_in"] == "trayapp.exe"
     assert "never to Explorer" in tray["reason"]
+
+
+def test_compiler_options_are_classified_not_silently_dropped():
+    from awt import compileroptions
+    opts = compileroptions.classify(
+        ["-lcomctl32", "-luxtheme", "-std=c++20", "-DFOO=1", "-Wl,--enable-auto-import",
+         "-fno-exceptions", "-lmystery"])
+    assert opts["libraries"] == ["comctl32", "uxtheme", "mystery"]
+    assert opts["unverified_libraries"] == ["mystery"]
+    assert opts["defines"] == ["-DFOO=1"]
+    assert opts["standards"] == ["-std=c++20"]
+    assert "-fno-exceptions" in [r["flag"] for r in opts["rejected"]]
+    assert "not an audited" in opts["rejected"][0]["reason"]
+    assert compileroptions.compile_flags(opts) == ["-DFOO=1"]
+    assert "-lcomctl32" in compileroptions.link_flags(opts)
+    assert "-DFOO=1" not in compileroptions.link_flags(opts)
+
+
+def test_builder_records_options_and_toolchain_even_without_a_compiler():
+    from awt import builder
+    src = MOD.replace("-DFOO=1", "-DFOO=1 -fno-exceptions")
+    path = os.path.join(REPO, ".sandbox", "fidelity-opts.wh.cpp")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    try:
+        result = builder.build(path, sandbox=os.path.join(REPO, ".sandbox", "tmp-fidelity"))
+    finally:
+        os.unlink(path)
+    assert result["compiler_options"]["defines"] == ["-DFOO=1"]
+    assert [r["flag"] for r in result["compiler_options"]["rejected"]] == ["-fno-exceptions"]
+    assert result["toolchain"]["target_arch"] == "x86-64"
+    assert "Windhawk Clang" in result["toolchain"]["note"]
+    assert any("not applied" in w["message"] for w in result["warnings"])
+
+
+def test_accepted_flags_reach_the_real_compile_and_link_commands():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from awt import builder
+    src = MOD.replace("-DFOO=1", "-DFOO=1 -fno-exceptions")
+    path = os.path.join(REPO, ".sandbox", "fidelity-flags.wh.cpp")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    commands = []
+
+    def fake_run(cmd, cwd=None):
+        commands.append(list(cmd))
+        if "-shared" in cmd:
+            out = cmd[cmd.index("-o") + 1]
+            with open(out, "wb") as f:
+                f.write(b"MZ")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    try:
+        with patch.object(builder, "missing_toolchain", return_value=[]), \
+             patch.object(builder, "_run", side_effect=fake_run), \
+             patch.object(builder, "_mangled_lifecycle", return_value={"Wh_ModInit": "_Z9Wh_ModInitv"}):
+            result = builder.build(path, sandbox=os.path.join(REPO, ".sandbox", "tmp-fidelity-flags"))
+    finally:
+        os.unlink(path)
+    assert result["ok"] is True, result["errors"]
+    compile_cmd, link_cmd = commands[0], next(c for c in commands if "-shared" in c)
+    assert "-DFOO=1" in compile_cmd and "-std=c++20" in compile_cmd
+    assert "-lcomctl32" in link_cmd and "-luxtheme" not in link_cmd  # not in this mod
+    assert not any("-fno-exceptions" in c for c in commands)
