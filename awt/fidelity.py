@@ -9,7 +9,7 @@ never modify ``verdict.level`` and never turn a simulation into a pass.
 import os
 import re
 
-from . import conformance, targeting
+from . import conformance, shellsurfaces, targeting
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OFFICIAL_API = os.path.join(REPO, "docs", "official", "windhawk_api.h")
@@ -39,7 +39,10 @@ LIFECYCLE = {
 
 # Wh_Log is a macro in the non-editing build and an empty inline body in the
 # WH_EDITING variant; neither body names InternalWh_Log, so map it explicitly.
-WRAPPER_FALLBACK = {"Wh_Log": "InternalWh_Log"}
+WRAPPER_FALLBACK = {
+    "Wh_Log": "InternalWh_Log",
+    "Wh_SetFunctionHookT": "InternalWh_SetFunctionHook",  # deprecated utils alias
+}
 
 
 def _code(source):
@@ -85,11 +88,25 @@ def api_inventory(source, shim_status=None):
     known_wh = {name[:-1].strip() for name in known_wh}
     known_utils = set(UTILS_UNDERLYING)
 
+    def wrapper_status(name):
+        if name in LIFECYCLE:
+            return ("lifecycle_export",
+                    "export implemented by the mod, not an engine API call")
+        if name not in known_wh:
+            return ("unknown_api",
+                    "not present in the cached Windhawk 1.7.3 headers")
+        inner = wh_map.get(name)
+        status = ({"stub": "stub", "missing": "not_in_shim"}.get(
+            shim_status.get(inner), "shim_implemented") if inner else "wrapper_only")
+        detail = ("backed by %s (%s)" % (inner, shim_status.get(inner, "unknown"))
+                  if inner else "inline wrapper; no separate engine call")
+        return status, detail
+
     apis, warnings, seen = [], [], set()
     for match in CALL_RE.finditer(_code(source)):
         namespace, name = match.group(1), match.group(2) or match.group(3)
-        if namespace:
-            full = "WindhawkUtils::" + name
+        full = ("WindhawkUtils::" + name) if namespace else name
+        if namespace and not name.startswith("Wh_"):
             if name not in known_utils:
                 status, detail = "unknown_api", "helper not in the cached official utils header"
             elif UTILS_UNDERLYING[name] is None:
@@ -102,19 +119,9 @@ def api_inventory(source, shim_status=None):
                     shim_status.get(inner), "shim_implemented")
                 detail = "backed by %s (%s)" % (inner, shim_status.get(inner, "unknown"))
         else:
-            full = name
-            if name in LIFECYCLE:
-                status, detail = ("lifecycle_export",
-                                  "export implemented by the mod, not an engine API call")
-            elif name not in known_wh:
-                status, detail = ("unknown_api",
-                                  "not present in the cached Windhawk 1.7.3 headers")
-            else:
-                inner = wh_map.get(name)
-                status = {"stub": "stub", "missing": "not_in_shim"}.get(
-                    shim_status.get(inner), "shim_implemented") if inner else "wrapper_only"
-                detail = ("backed by %s (%s)" % (inner, shim_status.get(inner, "unknown"))
-                          if inner else "inline wrapper; no separate engine call")
+            # Includes deprecated aliases such as WindhawkUtils::Wh_SetFunctionHookT,
+            # which are Wh_* wrappers declared in windhawk_utils.h.
+            status, detail = wrapper_status(name)
         if full in seen:
             continue
         seen.add(full)
@@ -219,6 +226,19 @@ def capabilities(rep, build_result=None, meta=None, source="", analysis=None):
                       else _status("not_applicable", "not referenced by the mod"))
     items["unload_hook_integrity"] = _status(
         "not_verifiable", "no byte-level check that unload restored hooked functions")
+    surfaces = shellsurfaces.analyze(source, meta, analysis)["surfaces"]
+    if any(s["coverage"] == "not_verifiable" for s in surfaces):
+        items["shell_behaviour"] = _status(
+            "not_verifiable", "source touches shell surfaces with no faithful stand-in: "
+            + ", ".join(s["id"] for s in surfaces
+                        if s["coverage"] == "not_verifiable"))
+    elif surfaces:
+        items["shell_behaviour"] = _status(
+            "simulated", "only stand-in surfaces detected: "
+            + ", ".join(s["id"] for s in surfaces))
+    else:
+        items["shell_behaviour"] = _status("not_applicable",
+                                           "no shell surface detected in the source")
     if (rep.get("artifacts") or {}).get("screenshots"):
         items["screenshot"] = _status("verified", "a real capture file was produced here",
                                       "pixels do not prove functional correctness")

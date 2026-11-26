@@ -285,3 +285,92 @@ def test_new_examples_exercise_and_disclose_the_new_surfaces():
     symbols = {a["name"]: a["status"] for a in fidelity.api_inventory(symbol_src)["apis"]}
     assert symbols["Wh_FindFirstSymbol"] == "stub"
     assert "api.stub" in {c["id"] for c in staticchecks.run_checks(symbol_src)["checks"]}
+
+
+def test_shell_surfaces_distinguish_start_xaml_from_public_win32():
+    from awt import shellsurfaces
+    source = """
+// ==WindhawkMod==
+// @id fake-start
+// @include StartMenuExperienceHost.exe
+// ==/WindhawkMod==
+BOOL WINAPI Wh_ModInit() {
+    HMODULE xaml = LoadLibraryW(L"Windows.UI.Xaml.dll");
+    HMODULE dui = LoadLibraryW(L"dui.dll");
+    FindWindowW(L"Shell_TrayWnd", NULL);
+    TrackPopupMenu(nullptr, 0, 0, 0, 0, nullptr, nullptr);
+    return TRUE;
+}
+"""
+    meta = metadata.parse_metadata(source)
+    result = shellsurfaces.analyze(source, meta)
+    by_id = {s["id"]: s for s in result["surfaces"]}
+    assert by_id["start_menu"]["coverage"] == "not_verifiable"
+    assert by_id["start_menu"]["stand_in"] is None
+    assert by_id["taskbar"]["coverage"] == "simulated"
+    assert by_id["dark_mode_undocumented"]["coverage"] == "not_verifiable"
+    assert result["summary"]["detected"] >= 4
+    assert result["target_repercussion"]["suggested_stand_in"] is None
+    assert any("symbols" in step for step in result["verification_plan"])
+
+
+def test_shell_surface_detection_ignores_long_resource_blobs():
+    from awt import shellsurfaces
+    blob = "ZDUg" + "DUI" * 300
+    source = ('const char* resource = "%s";\n'
+              'BOOL WINAPI Wh_ModInit() { return TRUE; }\n') % blob
+    result = shellsurfaces.analyze(source, metadata.parse_metadata(source))
+    assert result["surfaces"] == [], result["surfaces"]
+
+
+def test_multi_include_selects_explorer_stand_in_not_control_panel():
+    from awt import targeting
+    meta = {"include": ["explorer.exe", "control.exe"], "exclude": [], "raw": {}}
+    sel = targeting.select(meta, {"subjects": ["system-tray"]})
+    assert sel["suggested_stand_in"] == "trayapp.exe"
+    assert "control.exe include is only probed" in sel["reason"]
+    start = targeting.select({"include": ["StartMenuExperienceHost.exe"],
+                              "exclude": [], "raw": {}}, {})
+    assert start["suggested_stand_in"] is None
+    assert "not_verifiable" in start["reason"]
+
+
+def test_deprecated_utils_alias_and_real_windows_libraries_are_recognised():
+    from awt import compileroptions, fidelity
+    src = "WindhawkUtils::Wh_SetFunctionHookT(target, hook);"
+    api = fidelity.api_inventory(src)["apis"][0]
+    assert api["name"] == "WindhawkUtils::Wh_SetFunctionHookT"
+    assert api["status"] == "shim_implemented"
+    opts = compileroptions.classify(["-liphlpapi", "-lwlanapi", "-luuid"])
+    assert opts["accepted"] == ["-liphlpapi", "-lwlanapi", "-luuid"]
+    assert opts["unverified_libraries"] == []
+
+
+def test_report_attaches_shell_surfaces_and_target_repercussion():
+    from awt import builder, report
+    path = os.path.join(REPO, "examples", "tray-icon-demo.wh.cpp")
+    rep = report.new_report(builder.build(path),
+                            {"public_hooks": [], "internal_hooks": [], "unknown_hooks": []})
+    surfaces = rep["shell_surfaces"]
+    assert surfaces["summary"]["detected"] >= 1
+    assert any(s["id"] == "tray_icon" for s in surfaces["surfaces"])
+    assert "shell surfaces" in report.summary(rep)
+
+
+def test_shell_behaviour_capability_and_summary_never_claim_success():
+    from awt import fidelity, report
+    source = 'HMODULE h = LoadLibraryW(L"Windows.UI.Xaml.dll");'
+    fake_build = {"ok": False, "mod_id": "x", "mod_path": None,
+                  "meta": {"raw": {}, "include": []}, "errors": [], "warnings": [],
+                  "settings": {}}
+    fake_analysis = {"public_hooks": [], "internal_hooks": [], "unknown_hooks": []}
+    rep = report.new_report(fake_build, fake_analysis)
+    rep["verdict"].update({"level": "not_executed", "summary": ""})
+    caps = fidelity.capabilities(rep, {}, {}, source, {})
+    assert caps["items"]["shell_behaviour"]["status"] == "not_verifiable"
+    assert "start_menu" in caps["items"]["shell_behaviour"]["evidence"]
+    from awt import shellsurfaces
+    rep["shell_surfaces"] = shellsurfaces.analyze(source)
+    text = report.summary(rep)
+    assert "real Windows   : unknown (nothing was executed here)" in text
+    assert "shell surfaces :" in text

@@ -9,7 +9,7 @@ import json
 import re
 import sys
 
-from . import analyzer, compileroptions, fidelity, metadata
+from . import analyzer, compileroptions, fidelity, metadata, shellsurfaces
 
 # Preserve strings while removing comments (including the metadata/settings).
 # C++ raw strings and macro expansion are not fully parsed: this is a linter.
@@ -85,17 +85,26 @@ def run_checks(source, mod_path=None):
     for name in opts["unverified_libraries"]:
         add("library.unverified", "info", "-l%s is not in the known import-library set; "
             "the linker result decides" % name)
+    # Long base64/hex resource lines are data, not code: a blob that happens to
+    # contain the letters "DUI" is not a DUI dependency. Keep short string
+    # literals (module names such as twinui.pcshell.dll) but skip blobs.
+    probe = "\n".join(l for l in source.splitlines() if len(l) <= 240)
     unverifiable = (
         ("tool_mod.not_verifiable", r"\bWH_TOOL_MOD\b", "tool mods need Windhawk's "
          "dedicated tool process; not verifiable here"),
         ("shell.com_private", r"I[A-Z]\w*Shell\w*|IShellItem|ITrayNotify",
          "private shell COM interfaces are not available in this bench"),
-        ("shell.dui_xaml", r"\bDUI\b|Windows\.UI\.Xaml|twinui\.pcshell\.dll",
+        ("shell.dui_xaml", r"dui\.dll|Windows\.UI\.Xaml|twinui\.pcshell\.dll",
          "DUI/XAML shell internals are not verifiable under Wine"),
     )
     for cid, pattern, message in unverifiable:
-        if re.search(pattern, source, re.I):
+        if re.search(pattern, probe, re.I):
             add(cid, "warning", message)
+
+    for surface in shellsurfaces.analyze(source, meta)["surfaces"]:
+        add("shell_surface." + surface["id"],
+            "warning" if surface["coverage"] == "not_verifiable" else "info",
+            "%s: %s; %s" % (surface["id"], surface["coverage"], surface["reason"]))
     errors = sum(c["severity"] == "error" for c in checks)
     warnings = sum(c["severity"] == "warning" for c in checks)
     return {

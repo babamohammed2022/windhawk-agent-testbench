@@ -3,7 +3,7 @@ import json
 import os
 import time
 
-from . import fidelity
+from . import fidelity, shellsurfaces
 
 
 # Verdict levels, weakest to strongest. `not_executed` means no backend was able
@@ -61,7 +61,10 @@ def new_report(build_result, analysis) -> dict:
         },
         "artifacts": {"screenshots": [], "wine_log": None, "dumps": []},
     }
-    return fidelity.attach(rep, build_result, meta, source, analysis)
+    fidelity.attach(rep, build_result, meta, source, analysis)
+    if source:
+        rep["shell_surfaces"] = shellsurfaces.analyze(source, meta, analysis)
+    return rep
 
 
 def attach_symbol_matrix(rep, section) -> dict:
@@ -127,7 +130,9 @@ def summary(rep) -> str:
         "verdict        : %s" % v["level"],
         "verified       : %s" % (", ".join(v["verified"]) or "-"),
         "NOT verifiable : %s" % (", ".join(v["not_verifiable_here"]) or "-"),
-        "real Windows   : %s" % ("REQUIRED for the items above" if v["requires_real_windows"] else "not required"),
+        "real Windows   : %s" % (
+            "unknown (nothing was executed here)" if v["level"] == "not_executed" else
+            ("REQUIRED for the items above" if v["requires_real_windows"] else "not required")),
         "summary        : %s" % v["summary"],
     ]
     matrix = rep.get("symbol_matrix")
@@ -146,6 +151,12 @@ def summary(rep) -> str:
         s = sc.get("summary") or {}
         lines.append("static checks  : %d check(s) -> %d error(s), %d warning(s)"
                      % (s.get("checks", 0), s.get("errors", 0), s.get("warnings", 0)))
+    shells = rep.get("shell_surfaces") or {}
+    if shells:
+        by = (shells.get("summary") or {}).get("by_coverage") or {}
+        lines.append("shell surfaces : %d detected (simulated %d, not_verifiable %d)"
+                     % ((shells.get("summary") or {}).get("detected", 0),
+                        by.get("simulated", 0), by.get("not_verifiable", 0)))
     caps = rep.get("capabilities") or {}
     if caps:
         s = caps.get("summary") or {}

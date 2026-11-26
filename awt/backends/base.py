@@ -233,8 +233,11 @@ class Backend:
             from .. import analyzer as analyzer_mod
             from .. import fidelity as fidelity_mod
             from .. import metadata as metadata_mod
-            fidelity_mod.attach(rep, {}, metadata_mod.parse_metadata(source), source,
-                                analyzer_mod.analyze(source))
+            from .. import shellsurfaces as shell_mod
+            meta = metadata_mod.parse_metadata(source)
+            fidelity_mod.attach(rep, {}, meta, source, analyzer_mod.analyze(source))
+            rep["shell_surfaces"] = shell_mod.analyze(
+                source, meta, analyzer_mod.analyze(source))
         return report_mod.attach_symbol_matrix(rep, None) or rep
 
 

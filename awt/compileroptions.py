@@ -29,6 +29,10 @@ KNOWN_LIBS = {
     "oleaut32", "comctl32", "comdlg32", "gdiplus", "dwmapi", "uxtheme",
     "winhttp", "wininet", "runtimeobject", "crypt32", "psapi", "version",
     "imm32", "msimg32", "odbc32", "opengl32", "setupapi", "userenv",
+    # Import libraries used by real shell-recreation mods (e.g. the Windows 7
+    # network flyout): standard MinGW provides all of these.
+    "iphlpapi", "wlanapi", "uuid", "comdlg32", "oleacc", "propsys", "shcore",
+    "windowscodecs", "ntdll", "msvcrt",
 }
 
 

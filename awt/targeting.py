@@ -6,6 +6,7 @@ of how a pattern would select a process, alongside the runner's existing
 runtime ``include_analysis`` which records what actually happened.
 """
 import fnmatch
+import re
 
 # Every executable this bench can build is a stand-in, never the real product.
 STAND_INS = {
@@ -74,18 +75,30 @@ def select(meta, analysis=None, available=None):
                         "applies": not excluded_by})
 
     subjects = list(analysis.get("subjects") or [])
-    if not any(e["applies"] for e in entries):
+    applies = [e["include"] for e in entries if e["applies"]]
+    if not applies:
         chosen, why = None, ("every @include is vetoed by @exclude; the bench "
                              "cannot select a process without a mod")
-    elif any("control" in e["include"].lower() for e in entries if e["applies"]):
-        chosen = "testapp.exe" if "testapp.exe" in allowed else (allowed[0] if allowed else None)
-        why = "control-panel surface is only probed; a generic stand-in is used"
-    elif "system-tray" in subjects or any(
-            "explorer" in e["include"].lower() for e in entries if e["applies"]):
+    elif any(re.search(r"startmenu|shellxperience|searchhost|start-menu", i, re.I)
+             for i in applies):
+        chosen = None
+        why = ("the Start/XAML host has no faithful stand-in under Wine; the mod's "
+               "shell behaviour is not_verifiable here")
+    elif any("explorer" in i.lower() for i in applies):
         candidates = ["trayapp.exe", "testapp.exe"]
         chosen = next((c for c in candidates if c in allowed), None)
-        why = ("tray/shell include mapped to a notification client or generic "
-               "stand-in; never to Explorer")
+        why = ("explorer include mapped to a notification/generic stand-in; "
+               "never to Explorer")
+        if any("control" in i.lower() for i in applies):
+            why += ("; the control.exe include is only probed and is not a second "
+                    "execution target")
+    elif any("control" in i.lower() for i in applies):
+        chosen = "testapp.exe" if "testapp.exe" in allowed else (allowed[0] if allowed else None)
+        why = "control-panel surface is only probed; a generic stand-in is used"
+    elif "system-tray" in subjects:
+        candidates = ["trayapp.exe", "testapp.exe"]
+        chosen = next((c for c in candidates if c in allowed), None)
+        why = "tray subject mapped to a notification client stand-in; never to Explorer"
     else:
         chosen = "testapp.exe" if "testapp.exe" in allowed else (allowed[0] if allowed else None)
         why = "no specific stand-in matched; generic Win32 stand-in selected"
